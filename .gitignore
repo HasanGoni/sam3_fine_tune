@@ -183,3 +183,5 @@ overlay_posters/
 error_analysis/**/*.png
 error_analysis/**/*.jpg
 error_analysis/**/*.jpeg
+.github/workflows/deploy.yaml
+.github/workflows/test.yaml
