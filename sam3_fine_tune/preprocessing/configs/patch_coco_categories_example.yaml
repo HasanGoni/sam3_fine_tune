@@ -1,0 +1,33 @@
+# Patch selected categories from an existing COCO dataset.
+# This example patches the four wire categories in 9cat_separated_wires_v3
+# while keeping the other five categories unchanged.
+
+patch:
+  # Square patch edge length in pixels.
+  size: 256
+  # Overlap between adjacent patches in pixels.
+  # Stride = size - overlap.  128 = 50% overlap for 256x256 patches.
+  overlap: 128
+  # Minimum clipped bbox area (in pixels^2) required to keep an annotation
+  # inside a patch.  Small slivers below this are dropped.
+  min_target_area: 1.0
+
+# Categories whose source images will be tiled.  Other categories on the same
+# images are preserved in the patches as long as they intersect the patch.
+target_categories:
+  - thick_wire_HD
+  - thin_wire_HD
+  - thick_wire_panda
+  - thin_wire_panda
+
+splits:
+  - train
+  - test
+
+input:
+  # Source COCO dataset.  Must contain <split>/images/ and <split>/annotation_merged.json.
+  root: /home/hpc_storage/data/projects/userB/sam3_data/9cat_separated_wires_v3
+
+output:
+  # Destination dataset root.
+  root: /home/hpc_storage/data/projects/userB/sam3_data/9cat_separated_wires_v3_patched_wires_256

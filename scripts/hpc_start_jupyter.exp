@@ -1,0 +1,72 @@
+#!/usr/bin/expect -f
+# Start HPC Jupyter via dsx_p312_only_uv -> project .venv -> dsx_jl,
+# capture the tunneled URL, and exit. dsx_jl keeps running via nohup.
+
+set timeout 180
+set repo_root "/home/hpc_storage/data/projects/userB/void_detection_cegled_econo_line"
+set url_dir "/home/ai_dsx/jupyter-homes/userB"
+set log_file "${url_dir}/.dsx_jl_last.log"
+set url_file "${url_dir}/.dsx_jl_last.url"
+
+# Ensure log directory exists
+spawn bash -c "mkdir -p ${url_dir}"
+expect eof
+
+# Start an interactive bash shell on the HPC login node.
+# If this script is run via ssh, this is a local HPC shell.
+spawn bash
+
+# Load aliases so dsx_p312_only_uv is available.
+send "source /ifxhome/userB/.bash_aliases\r"
+expect -re {[#>$] $}
+
+# Enter the DSX environment. This replaces the shell via exec chains,
+# so after the banner we get a fresh interactive shell.
+send "dsx_p312_only_uv\r"
+expect "ai_dsx/virtualenvs/only_uv_p312"
+expect -re {[#>$] $}
+
+# Activate the project virtual environment.
+send "source ${repo_root}/.venv/bin/activate\r"
+expect -re {[#>$] $}
+
+# Start dsx_jl in the background with nohup so it survives SSH logout.
+send "nohup dsx_jl --root-dir ${repo_root} > ${log_file} 2>&1 &\r"
+expect -re {[#>$] $}
+
+# Poll the log until the URL appears (up to ~2 minutes).
+set url ""
+set attempts 0
+while { $attempts < 60 } {
+    # Extract the Hostname URL line from the log.
+    send "grep -m1 'Hostname:' ${log_file} | grep -oE 'http://\[^ ]+' > ${url_file} 2>/dev/null\r"
+    expect -re {[#>$] $}
+
+    if { [file exists ${url_file}] } {
+        set fp [open ${url_file} r]
+        set file_data [read $fp]
+        close $fp
+        set file_data [string trim $file_data]
+        if { [regexp {http://[^ ]+} $file_data url] } {
+            break
+        }
+    }
+
+    sleep 2
+    incr attempts
+}
+
+if { $url != "" } {
+    send_user "\n\n=== HPC JUPYTER URL ===\n$url\n=======================\n\n"
+    # Leave a clean URL file for later retrieval.
+    set fp [open ${url_file} w]
+    puts $fp $url
+    close $fp
+} else {
+    send_user "\n\n=== ERROR: Could not capture Jupyter URL within timeout ===\n"
+    send_user "Check ${log_file} on HPC for details.\n\n"
+}
+
+# Exit the inner shells. dsx_jl remains alive because of nohup.
+send "exit\r"
+expect eof

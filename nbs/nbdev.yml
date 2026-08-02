@@ -1,0 +1,9 @@
+project:
+  output-dir: _docs
+
+website:
+  title: "sam3_fine_tune"
+  site-url: "https://"userB Mohammed Hasan ".github.io/sam3_fine_tune"
+  description: "Fine tune SAM3 with own data"
+  repo-branch: main
+  repo-url: "https://github.com/"userB Mohammed Hasan "/sam3_fine_tune"

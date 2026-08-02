@@ -1,0 +1,32 @@
+# Example config for create_patched_dataset.py
+# Tiles large images/masks into fixed-size patches with overlap and produces
+# COCO-format annotations for the SAM3 training pipeline.
+
+patch:
+  # Patch edge length in pixels.  All output patches are size x size.
+  size: 256
+  # Overlap between adjacent patches in pixels.
+  # Stride = size - overlap.  Use 0 for non-overlapping patches.
+  overlap: 128
+  # Minimum fraction of non-zero mask pixels required to keep a patch.
+  # Patches with less foreground than this are skipped.
+  min_mask_ratio: 0.001
+
+category:
+  # Category name and id written into the COCO annotation.
+  # When this dataset is later merged with others, the id may be reassigned.
+  name: thin_wire_HD
+  id: 1
+
+splits:
+  train:
+    images: /home/hpc_storage/data/projects/userB/sam3_data/raw_thin_wire_HD/train/images
+    masks: /home/hpc_storage/data/projects/userB/sam3_data/raw_thin_wire_HD/train/masks
+  test:
+    images: /home/hpc_storage/data/projects/userB/sam3_data/raw_thin_wire_HD/test/images
+    masks: /home/hpc_storage/data/projects/userB/sam3_data/raw_thin_wire_HD/test/masks
+
+output:
+  # Root directory for the patched dataset.
+  # Will contain train/images, train/masks, train/annotation.json, etc.
+  root: /home/hpc_storage/data/projects/userB/sam3_data/thin_wire_HD_patched_256

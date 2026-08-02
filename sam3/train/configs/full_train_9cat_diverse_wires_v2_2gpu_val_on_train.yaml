@@ -1,0 +1,45 @@
+defaults:
+- full_train_9cat_diverse_wires_v2_2gpu
+- _self_
+paths:
+  experiment_log_dir: /home/hpc_storage/data/projects/userB/test_sam3/sam3_fine_tune/experiments/9cat_diverse_wires_v2_2gpu_val_on_train
+trainer:
+  mode: val
+  skip_first_val: false
+  max_epochs: 0
+  val_epoch_freq: 1
+  distributed:
+    backend: nccl
+    find_unused_parameters: true
+    gradient_as_bucket_view: true
+launcher:
+  num_nodes: 1
+  gpus_per_node: 1
+  experiment_log_dir: /home/hpc_storage/data/projects/userB/test_sam3/sam3_fine_tune/experiments/9cat_diverse_wires_v2_2gpu_val_on_train
+  multiprocessing_context: forkserver
+data:
+  val:
+    dataset:
+      img_folder: ${paths.pin_dir_root}/train/images/
+      ann_file: ${paths.pin_dir_root}/train/annotation_merged.json
+      training: false
+meters:
+  val:
+    pin:
+      detection:
+        dump_dir: ${launcher.experiment_log_dir}/dumps/train_pins
+        pred_file_evaluators:
+        - _target_: sam3.eval.coco_eval_offline.CocoEvaluatorOfflineWithPredFileEvaluators
+          gt_path: ${paths.pin_dir_root}/train/annotation_merged.json
+          tide: false
+          iou_type: segm
+        - _target_: sam3.eval.per_category_eval.PerCategoryEvalWithOverlays
+          gt_path: ${paths.pin_dir_root}/train/annotation_merged.json
+          img_folder: ${paths.pin_dir_root}/train/images/
+          overlay_dir: ${launcher.experiment_log_dir}/dumps/category_overlays
+          iou_type: segm
+          num_overlay_samples: 1
+          score_threshold: 0.2
+checkpoint:
+  save_dir: ${launcher.experiment_log_dir}/checkpoints
+  resume_from: /home/hpc_storage/data/projects/userB/test_sam3/sam3_fine_tune/experiments/9cat_diverse_wires_v2_2gpu/checkpoints/val_pin_detection_coco_eval_segm_AP.pt

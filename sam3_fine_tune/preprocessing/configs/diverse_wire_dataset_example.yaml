@@ -1,0 +1,79 @@
+model:
+  name: convnext_tiny
+  checkpoint: /home/hpc_storage/Models/dinov3_models/dinov3_convnext_tiny_pretrain_lvd1689m-21b726bb.pth
+  batch_size: 64
+  image_size: 224
+
+# Pool to draw the diversity-selected categories from (large patched dataset).
+source:
+  root: /home/hpc_storage/data/projects/userB/sam3_data/9cat_separated_wires_v3_patched_wires_256_v8
+  splits: [train, test]
+
+# Categories kept unchanged (existing train/test split copied through as-is).
+# All 9 original categories except the 3 diverse ones below live here.
+fixed_categories:
+  - name: et_pin
+    source_root: /home/hpc_storage/data/projects/userB/sam3_data/9cat_separated_wires_v3_unique_panda
+    splits: [train, test]
+  - name: eberhard_pin
+    source_root: /home/hpc_storage/data/projects/userB/sam3_data/9cat_separated_wires_v3_unique_panda
+    splits: [train, test]
+  - name: wuxi_pin
+    source_root: /home/hpc_storage/data/projects/userB/sam3_data/9cat_separated_wires_v3_unique_panda
+    splits: [train, test]
+  - name: war_crack
+    source_root: /home/hpc_storage/data/projects/userB/sam3_data/9cat_separated_wires_v3_unique_panda
+    splits: [train, test]
+  - name: matrix_chip
+    source_root: /home/hpc_storage/data/projects/userB/sam3_data/9cat_separated_wires_v3_unique_panda
+    splits: [train, test]
+  - name: thick_wire_panda
+    source_root: /home/hpc_storage/data/projects/userB/sam3_data/9cat_separated_wires_v3_unique_panda
+    splits: [train, test]
+
+# Categories rebalanced to a fixed TOTAL count via diversity (farthest-point)
+# sampling over DINOv3 embeddings, then split train/test. `test_count` is an
+# optional absolute override: if set, exactly that many selected images go to
+# test and the rest go to train, ignoring the global split.train_ratio for
+# that category (thin_wire_panda needed more TRAIN data specifically, so its
+# test count is pinned at 200 while target_count grew 1000 -> 1200 to reach
+# train=1000).
+diverse_categories:
+  - name: thin_wire_panda
+    target_count: 1200
+    test_count: 200
+  - name: thick_wire_HD
+    target_count: 1000
+  - name: thin_wire_HD
+    target_count: 1000
+
+# Final category id order in the output COCO categories list. Values here are
+# SOURCE category names (used to match annotations) -- see
+# category_display_names below for renaming the output "name" field.
+category_order:
+  - et_pin
+  - eberhard_pin
+  - wuxi_pin
+  - war_crack
+  - matrix_chip
+  - thick_wire_HD
+  - thin_wire_HD
+  - thick_wire_panda
+  - thin_wire_panda
+
+# Optional: override the output COCO category "name" field per source name,
+# without affecting internal matching (which always uses category_order's
+# source names). Used here to turn underscore-joined wire category names
+# into natural-language (space-separated) prompt strings.
+category_display_names:
+  thick_wire_HD: "thick wire HD"
+  thin_wire_HD: "thin wire HD"
+  thick_wire_panda: "thick wire panda"
+  thin_wire_panda: "thin wire panda"
+
+split:
+  train_ratio: 0.8
+  seed: 42
+
+output:
+  root: /home/hpc_storage/data/projects/userB/sam3_data/9cat_diverse_wires_v1

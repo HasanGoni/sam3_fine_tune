@@ -1,0 +1,70 @@
+model:
+  name: convnext_tiny
+  checkpoint: /home/hpc_storage/Models/dinov3_models/dinov3_convnext_tiny_pretrain_lvd1689m-21b726bb.pth
+  batch_size: 64
+  image_size: 224
+
+# Pool to draw the diversity-selected categories from (large patched dataset).
+source:
+  root: /home/hpc_storage/data/projects/userB/sam3_data/9cat_separated_wires_v3_patched_wires_256_v8
+  splits: [train, test]
+
+# Categories kept unchanged (existing train/test split copied through as-is).
+fixed_categories:
+  - name: et_pin
+    source_root: /home/hpc_storage/data/projects/userB/sam3_data/9cat_separated_wires_v3_unique_panda
+    splits: [train, test]
+  - name: eberhard_pin
+    source_root: /home/hpc_storage/data/projects/userB/sam3_data/9cat_separated_wires_v3_unique_panda
+    splits: [train, test]
+  - name: wuxi_pin
+    source_root: /home/hpc_storage/data/projects/userB/sam3_data/9cat_separated_wires_v3_unique_panda
+    splits: [train, test]
+  - name: war_crack
+    source_root: /home/hpc_storage/data/projects/userB/sam3_data/9cat_separated_wires_v3_unique_panda
+    splits: [train, test]
+  - name: matrix_chip
+    source_root: /home/hpc_storage/data/projects/userB/sam3_data/9cat_separated_wires_v3_unique_panda
+    splits: [train, test]
+  - name: thick_wire_panda
+    source_root: /home/hpc_storage/data/projects/userB/sam3_data/9cat_separated_wires_v3_unique_panda
+    splits: [train, test]
+
+# Categories rebalanced to a fixed TOTAL count via diversity (farthest-point)
+# sampling over DINOv3 embeddings, then split train/test.
+diverse_categories:
+  - name: thin_wire_panda
+    target_count: 2000
+    test_count: 200
+    # Filter: keep only patches with a meaningful, fairly continuous thin wire
+    # panda mask. Excludes patches with no/very few masks or only tiny fragments.
+    min_total_area: 1000
+    min_max_component_area: 1000
+  - name: thick_wire_HD
+    target_count: 1000
+  - name: thin_wire_HD
+    target_count: 1000
+
+category_order:
+  - et_pin
+  - eberhard_pin
+  - wuxi_pin
+  - war_crack
+  - matrix_chip
+  - thick_wire_HD
+  - thin_wire_HD
+  - thick_wire_panda
+  - thin_wire_panda
+
+category_display_names:
+  thick_wire_HD: "thick wire HD"
+  thin_wire_HD: "thin wire HD"
+  thick_wire_panda: "thick wire panda"
+  thin_wire_panda: "thin wire panda"
+
+split:
+  train_ratio: 0.8
+  seed: 42
+
+output:
+  root: /home/hpc_storage/data/projects/userB/sam3_data/9cat_diverse_wires_v2
