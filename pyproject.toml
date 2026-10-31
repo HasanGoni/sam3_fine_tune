@@ -95,6 +95,10 @@ train = [
     "scikit-learn",
 ]
 
+sambaunet = [
+    "transformers>=4.44",
+]
+
 [project.urls]
 "Homepage" = "https://github.com/facebookresearch/sam3"
 "Bug Tracker" = "https://github.com/facebookresearch/sam3/issues"

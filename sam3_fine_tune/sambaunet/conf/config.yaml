@@ -1,0 +1,36 @@
+# SAMBA-UNet fine-tuning. Override anything from the CLI, e.g.
+#   python -m sam3_fine_tune.sambaunet.train data.root=/path/to/dataset trainer.epochs=100 optim.lr=5e-4
+seed: 0
+
+data:
+  root: ???                    # <root>/{train,test}/{images,annotation.json}  (same layout as the SAM3 pipeline)
+  train_split: train
+  val_split: test              # NOTE: same protocol as the SAM3 config (best checkpoint picked on the test split)
+  ann_file: annotation.json    # category names in it are the SAM3 text prompts
+  size: 256                    # SAMBA-UNet input resolution (paper: 256)
+  batch_size: 8
+  num_workers: 4
+  augment: true
+
+model:
+  sam_name: facebook/sam-vit-base
+  sam_tiny: false              # true = random tiny SAM encoder (unit tests / smoke runs, no download)
+  rank: 4                      # LoRA rank
+  dims: [96, 192, 384, 768]    # Mamba U-Net widths
+  grad_checkpoint: false       # true = recompute VSS blocks in backward (less GPU memory, ~30% slower)
+
+optim:                         # paper section 4.2: AdamW, lr 1e-3 -> cosine -> 1e-4
+  lr: 1.0e-3
+  min_lr: 1.0e-4
+  weight_decay: 1.0e-2
+
+trainer:
+  epochs: 100                  # paper: 300
+  device: auto                 # auto | cpu | cuda
+  threshold: 0.5               # sigmoid threshold for validation IoU
+  log_every: 10
+  resume: null                 # path to last.pt
+
+hydra:
+  run:
+    dir: experiments/sambaunet/${now:%Y-%m-%d_%H-%M-%S}

@@ -1,0 +1,13 @@
+# python -m sam3_fine_tune.sambaunet.evaluate checkpoint=experiments/sambaunet/<run>/checkpoints/best.pt data.root=/path/to/dataset
+checkpoint: ???
+data:
+  root: ???
+  split: test
+  ann_file: annotation.json
+device: auto                  # auto | cpu | cuda
+threshold: 0.5
+save_overlays: false          # blend predicted masks onto the image for error analysis
+
+hydra:
+  run:
+    dir: experiments/sambaunet_eval/${now:%Y-%m-%d_%H-%M-%S}
