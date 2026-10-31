@@ -34,8 +34,8 @@ def test_metrics_match_the_sam3_definition():
     assert summ["overall"].keys() >= {"precision", "recall", "total_TP_pixels"}
 
 
-def test_metrics_agree_with_sam3_compute_foreground_iou():
-    ev = pytest.importorskip("sam3_fine_tune.evaluation.single_eval_pipe")  # multi_eval_pipe.py has a SyntaxError on line 1
+def test_metrics_agree_with_sam3_multi_eval_compute_foreground_iou():
+    ev = pytest.importorskip("sam3_fine_tune.evaluation.multi_eval_pipe")
     rng = np.random.default_rng(0)
     pred, gt = rng.random((1, 16, 16)) > 0.5, rng.random((1, 16, 16)) > 0.5
     s = CategoryScores(["a"]); s.update(pred, gt)
