@@ -19,10 +19,11 @@ This guide provides comprehensive documentation for fine-tuning SAM3 for segment
 11. [Step 5: Run Training](#step-5-run-training)
 12. [Step 6: Inference](#step-6-inference)
 13. [Step 7: Evaluation](#step-7-evaluation)
-14. [Step 8: Visualization &amp; Analysis](#step-8-visualization--analysis)
-15. [Future Direction of the Project](#future-direction-of-the-project)
-16. [Training Commands Quick Reference](#training-commands-quick-reference)
-17. [Troubleshooting: Training Crashes &amp; Anomaly Dumps](#troubleshooting-training-crashes--anomaly-dumps)
+14. [SAMBA-UNet baseline](#samba-unet-baseline-comparison-with-sam3)
+15. [Step 8: Visualization &amp; Analysis](#step-8-visualization--analysis)
+16. [Future Direction of the Project](#future-direction-of-the-project)
+17. [Training Commands Quick Reference](#training-commands-quick-reference)
+18. [Troubleshooting: Training Crashes &amp; Anomaly Dumps](#troubleshooting-training-crashes--anomaly-dumps)
 
 ---
 
@@ -423,22 +424,64 @@ gpu_q_ "python train.py -c configs/config_gpu_q.yaml --num-gpus 1 --num-nodes 1"
 
 ### Shortcut: train and evaluate with one command
 
-After Steps 2-3 (a COCO dataset `<root>/{train,test}/{images,annotation.json}`), a single command patches a copy of
-`full_train_config.yaml`, trains, then scores the best checkpoint on `test/` (prompt = `category_name`, ground truth =
-the COCO masks):
+After Steps 2-3 you have a COCO dataset `<root>/{train,test}/{images,annotation.json}`. One command then patches a copy
+of `full_train_config.yaml`, trains, and scores the best checkpoint on `test/` (text prompt = `category_name`, ground
+truth = the COCO masks). It needs no scheduler: it runs wherever you start it, so on a machine with a GPU (or the CPU) it
+works without `bsub`.
 
 ```bash
 python -m sam3_fine_tune.finetune \
-    --data-root /path/to/dataset --sam3-checkpoint /path/to/sam3.pt --bpe-path /path/to/bpe_simple_vocab_16e6.txt.gz \
-    --experiment-dir experiments/my_run --epochs 10 --train-batch-size 2 --grad-accum 2 --category-chunk-size 9
+    --data-root /path/to/dataset \
+    --sam3-checkpoint /path/to/sam3.pt \
+    --bpe-path /path/to/bpe_simple_vocab_16e6.txt.gz \
+    --experiment-dir experiments/my_run \
+    --epochs 10 --train-batch-size 2 --grad-accum 2 --category-chunk-size 9
 ```
 
-* Results: `<experiment-dir>/eval/multiclass_foreground_iou_summary.json` (same layout as Step 7, so it can be compared
-  with SAMBA-UNet); the exact config is saved as `<experiment-dir>/config_used.yaml`.
-* `--skip-eval` trains only; `--eval-only` scores an existing `--experiment-dir` (e.g. with `--threshold 0.3`).
-* `--accelerator auto|cuda|cpu`, `--num-gpus N`. Unset options keep the values of `full_train_config.yaml`;
-  see the CLAUDE.md notes on `category_chunk_size` and `gradient_accumulation_steps` before changing them.
-* On the HPC wrap it in `bsub` as in the examples above.
+**What happens, in order**
+
+1. The dataset layout is checked, and `annotation_merged.json` is created as a copy of `annotation.json` in `train/` and
+   `test/` if missing (the shipped configs read that file).
+2. `full_train_config.yaml` is copied, your flags are applied, and the result is saved as
+   `<experiment-dir>/config_used.yaml`. A temporary `sam3/train/configs/_gen_<run>.yaml` is written for `train.py`
+   (which loads configs by name from that folder) and deleted afterwards.
+3. `sam3/train/train.py` runs with that config (`PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` is set unless you set it).
+4. The best-validation-AP checkpoint (`checkpoints/val_pin_detection_coco_eval_segm_AP.pt`) is selected, or
+   `checkpoints/checkpoint.pt` if no best one was kept, and evaluated on `test/`.
+
+**Outputs** in `<experiment-dir>/`: `config_used.yaml`, `checkpoints/`, `tensorboard/`, `logs/`, and
+`eval/multiclass_foreground_iou_summary.json`. The JSON has the same layout as the Step 7 multi-class evaluation
+(`summary.categories.<name>.overall_foreground_iou`, `pixel_precision`, `pixel_recall`, `summary.overall`,
+`per_category_details`) plus a `meta` block (checkpoint used, threshold, device, median latency per image), so it can be
+compared key-by-key with the SAMBA-UNet baseline below.
+
+**Options** (anything not set keeps the value in `full_train_config.yaml`)
+
+| Flag | Meaning |
+|---|---|
+| `--data-root`, `--sam3-checkpoint`, `--bpe-path` | required: dataset, base `sam3.pt`, tokenizer vocabulary |
+| `--experiment-dir` | output directory (default `experiments/sam3_<timestamp>`) |
+| `--epochs`, `--train-batch-size`, `--val-batch-size`, `--grad-accum` | training schedule; `num_gpus x train_batch_size x grad_accum` must divide the train set size |
+| `--category-chunk-size` | GPU-memory lever (train and val); see the "Training config gotchas" in `CLAUDE.md` before raising it |
+| `--num-gpus`, `--accelerator auto\|cuda\|cpu` | hardware; `cpu` is for debugging only (minutes per step) |
+| `--base-config` | use another YAML than `full_train_config.yaml` as the template |
+| `--skip-eval` | train only |
+| `--eval-only` | evaluate the existing `--experiment-dir` without training |
+| `--threshold`, `--max-eval-images` | evaluation confidence threshold (default 0.5) and an image cap for quick checks |
+
+**Good to know**
+
+* The trainer validates every `val_epoch_freq` epochs; the CLI lowers it to at most `--epochs`, so short runs still
+  validate once. The first epoch's validation is skipped by the base config.
+* An evaluation score of `0.0` right after a very short or tiny-data run usually means the model's confidence is below
+  `--threshold`, not that evaluation is broken. Re-run with `--eval-only --threshold 0.1` to see lower-confidence masks.
+* Re-running with the same `--experiment-dir` resumes from its `checkpoint.pt` (the trainer's behaviour); use a fresh
+  directory for a clean run.
+
+**Verified so far:** unit tests (`pytest tests/finetune`) and one end-to-end smoke run (2-image synthetic dataset,
+real `sam3.pt`, 1 epoch, single GPU) covering train, best-checkpoint selection and evaluation. **Not yet verified:** runs
+on the HPC through `bsub`, multi-GPU (`--num-gpus > 1`), and a comparison with the notebook-based Step 7 numbers on the
+same data (tracked in issue #11). To run it on the HPC, wrap the same command in `bsub` as in the examples above.
 
 ---
 
@@ -514,6 +557,23 @@ Use `05_multi_eval_pipeline.ipynb` or `multi_eval_pipeline.py`:
 | **Precision**      | TP / (TP + FP)                                    |
 | **Recall**         | TP / (TP + FN)                                    |
 | **F1 Score**       | 2 × (Precision × Recall) / (Precision + Recall) |
+
+---
+
+## SAMBA-UNet baseline (comparison with SAM3)
+
+`sam3_fine_tune/sambaunet/` is a semantic-segmentation baseline (SAM ViT-B + Mamba U-Net, no text prompts) trained on
+the same COCO dataset, with Hydra CLIs and an evaluation that writes the same `multiclass_foreground_iou_summary.json`:
+
+```bash
+uv sync --extra sambaunet
+python -m sam3_fine_tune.sambaunet.train data.root=/path/to/dataset trainer.epochs=100
+python -m sam3_fine_tune.sambaunet.evaluate checkpoint=experiments/sambaunet/<run>/checkpoints/best.pt data.root=/path/to/dataset
+```
+
+A runnable tutorial (Python API and CLI, synthetic data, CPU) is `nbs/14_sambaunet_api_and_cli.ipynb`; details are in
+`sam3_fine_tune/sambaunet/README.md`. Compare the two models on the same `test/` split via
+`summary.categories.<name>.overall_foreground_iou`, `pixel_precision` and `pixel_recall`.
 
 ---
 
