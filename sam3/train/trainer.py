@@ -48,6 +48,7 @@ from sam3.train.utils.train_utils import (
     log_env_variables,
     makedir,
     MemMeter,
+    resolve_accelerator,
     Phase,
     ProgressMeter,
     set_seeds,
@@ -423,7 +424,7 @@ class Trainer:
         checkpoint: Dict[str, Any],
         max_epochs: int,
         mode: str = "train",
-        accelerator: str = "cuda",
+        accelerator: str = "cuda",  # auto | cuda | cpu
         seed_value: int = 123,
         val_epoch_freq: int = 1,
         distributed: Dict[str, bool] = None,
@@ -438,6 +439,7 @@ class Trainer:
         empty_gpu_mem_cache_after_eval: bool = True,
         gradient_accumulation_steps: int = 1,
     ):
+        accelerator = resolve_accelerator(accelerator)
         self._setup_env_variables(env_variables)
         self._setup_timers()
 
@@ -530,6 +532,10 @@ class Trainer:
     def _infer_distributed_backend_if_none(self, distributed_conf, accelerator):
         if distributed_conf.backend is None:
             distributed_conf.backend = "nccl" if accelerator == "cuda" else "gloo"
+        elif distributed_conf.backend == "nccl" and accelerator != "cuda":
+            # the shipped GPU configs pin backend: nccl, which cannot initialise without GPUs
+            logging.warning("distributed.backend=nccl needs GPUs; using gloo for accelerator=%s", accelerator)
+            distributed_conf.backend = "gloo"
 
     def _setup_env_variables(self, env_variables_conf) -> None:
         if env_variables_conf is not None:
@@ -1048,7 +1054,7 @@ class Trainer:
             # loop anyway
             if self.is_intermediate_val_epoch(self.epoch):
                 self.run_val()
-                if torch.cuda.is_available() and self.empty_gpu_mem_cache_after_eval:
+                if self.device.type == "cuda" and self.empty_gpu_mem_cache_after_eval:
                     # release memory buffers held by the model during eval (which typically
                     # involves a lot more frames in video grounding that during training)
                     torch.cuda.empty_cache()
@@ -1125,7 +1131,7 @@ class Trainer:
             # compute output
             with torch.no_grad():
                 with torch.amp.autocast(
-                    device_type="cuda",
+                    device_type=self.device.type,
                     enabled=(self.optim_conf.amp.enabled if self.optim_conf else False),
                     dtype=(
                         get_amp_type(self.optim_conf.amp.amp_dtype)
@@ -1159,7 +1165,7 @@ class Trainer:
                 time.time() - self.start_time + self.ckpt_time_elapsed
             )
 
-            if torch.cuda.is_available():
+            if self.device.type == "cuda":
                 mem.update(reset_peak_usage=True)
 
             if data_iter % self.logging_conf.log_freq == 0:
@@ -1392,7 +1398,7 @@ class Trainer:
             )
             with ddp_context:
                 with torch.amp.autocast(
-                    device_type="cuda",
+                    device_type=self.device.type,
                     enabled=self.optim_conf.amp.enabled,
                     dtype=get_amp_type(self.optim_conf.amp.amp_dtype),
                 ):

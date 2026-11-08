@@ -284,6 +284,8 @@ def sigmoid_focal_loss(
     Returns:
         Loss tensor
     """
+    # The fused kernels are Triton/CUDA only; the pure-PyTorch branch below computes the same loss on CPU.
+    triton = triton and inputs.is_cuda
     if not (0 <= alpha <= 1) and triton:
         raise RuntimeError(f"Alpha should be in [0,1], got {alpha}")
     if triton:

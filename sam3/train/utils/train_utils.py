@@ -194,6 +194,27 @@ class AverageMeter:
         return fmtstr.format(**self.__dict__)
 
 
+def resolve_accelerator(accelerator: str = "auto") -> str:
+    """Map the config value to a concrete device type.
+
+    ``auto`` -> cuda if a GPU is visible, else cpu. ``cuda`` without a GPU fails here, early and readably,
+    instead of deep inside NCCL / CUDA initialisation. ``cpu`` is always allowed.
+    """
+    if accelerator == "auto":
+        return "cuda" if torch.cuda.is_available() else "cpu"
+    if accelerator == "cuda":
+        if not torch.cuda.is_available():
+            raise RuntimeError(
+                "trainer.accelerator=cuda but no CUDA device is visible. "
+                "Set trainer.accelerator=cpu (slow, for debugging) or accelerator=auto, "
+                "or pass --accelerator cpu to train.py."
+            )
+        return "cuda"
+    if accelerator == "cpu":
+        return "cpu"
+    raise ValueError(f"Unsupported accelerator: {accelerator!r} (use auto, cuda or cpu)")
+
+
 class MemMeter:
     """Computes and stores the current, avg, and max of peak Mem usage per iteration"""
 
@@ -212,12 +233,13 @@ class MemMeter:
         self._allow_updates = True
 
     def update(self, n=1, reset_peak_usage=True):
-        self.val = torch.cuda.max_memory_allocated() // 1e9
+        on_gpu = torch.cuda.is_available() and torch.device(self.device).type == "cuda"
+        self.val = torch.cuda.max_memory_allocated() // 1e9 if on_gpu else 0  # no CUDA allocator on CPU
         self.sum += self.val * n
         self.count += n
         self.avg = self.sum / self.count
         self.peak = max(self.peak, self.val)
-        if reset_peak_usage:
+        if reset_peak_usage and on_gpu:
             torch.cuda.reset_peak_memory_stats()
 
     def __str__(self):

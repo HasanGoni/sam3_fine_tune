@@ -54,6 +54,11 @@ def is_main_process():
     return get_rank() == 0
 
 
+def _object_gather_device(cpu_group) -> str:
+    """Tensors for object gathering live on the GPU only when NCCL needs them (no cpu group) and a GPU exists."""
+    return "cuda" if cpu_group is None and torch.cuda.is_available() else "cpu"
+
+
 def all_gather_via_filesys(data, filesys_save_dir=None, gather_to_rank_0_only=False):
     """
     Run all_gather on arbitrary picklable data (not necessarily tensors), similar to
@@ -141,7 +146,7 @@ def all_gather(data, force_cpu=False, force_filesys=False, filesys_save_dir=None
     buffer = io.BytesIO()
     torch.save(data, buffer)
     data_view = buffer.getbuffer()
-    device = "cuda" if cpu_group is None else "cpu"
+    device = _object_gather_device(cpu_group)
     tensor = torch.ByteTensor(data_view).to(device)
 
     # obtain Tensor size of each rank
