@@ -33,3 +33,5 @@ The selective scan is pure PyTorch (log-depth `associative_scan`); the paper's C
 Both evaluations write `multiclass_foreground_iou_summary.json`; compare `summary.categories.<name>.overall_foreground_iou`,
 `pixel_precision`, `pixel_recall` and `summary.overall`. Use the same `test/` split. Caveat: both trainers pick the best
 checkpoint on that split, so neither number is a clean held-out estimate.
+
+Worked example (Python API + Hydra CLI, runs on CPU with synthetic data): `nbs/14_sambaunet_api_and_cli.ipynb`.
