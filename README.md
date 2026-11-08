@@ -421,6 +421,25 @@ gpu_q_ "python train.py -c configs/config_gpu_q.yaml --num-gpus 1 --num-nodes 1"
 
 > Note: To train, one must be in the sam3/train directory.
 
+### Shortcut: train and evaluate with one command
+
+After Steps 2-3 (a COCO dataset `<root>/{train,test}/{images,annotation.json}`), a single command patches a copy of
+`full_train_config.yaml`, trains, then scores the best checkpoint on `test/` (prompt = `category_name`, ground truth =
+the COCO masks):
+
+```bash
+python -m sam3_fine_tune.finetune \
+    --data-root /path/to/dataset --sam3-checkpoint /path/to/sam3.pt --bpe-path /path/to/bpe_simple_vocab_16e6.txt.gz \
+    --experiment-dir experiments/my_run --epochs 10 --train-batch-size 2 --grad-accum 2 --category-chunk-size 9
+```
+
+* Results: `<experiment-dir>/eval/multiclass_foreground_iou_summary.json` (same layout as Step 7, so it can be compared
+  with SAMBA-UNet); the exact config is saved as `<experiment-dir>/config_used.yaml`.
+* `--skip-eval` trains only; `--eval-only` scores an existing `--experiment-dir` (e.g. with `--threshold 0.3`).
+* `--accelerator auto|cuda|cpu`, `--num-gpus N`. Unset options keep the values of `full_train_config.yaml`;
+  see the CLAUDE.md notes on `category_chunk_size` and `gradient_accumulation_steps` before changing them.
+* On the HPC wrap it in `bsub` as in the examples above.
+
 ---
 
 ## Step 6: Inference

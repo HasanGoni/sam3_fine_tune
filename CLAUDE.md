@@ -132,6 +132,10 @@ earlier.
 
 ## Training commands
 
+One-command train + test-set eval: `python -m sam3_fine_tune.finetune --data-root ... --sam3-checkpoint ... --bpe-path ...`
+(`sam3_fine_tune/finetune/`, see README Step 5). It writes a temporary `_gen_*.yaml` into `sam3/train/configs/` because
+`train.py` composes configs by name from that directory.
+
 Run from `sam3/train/`:
 
 ```bash
