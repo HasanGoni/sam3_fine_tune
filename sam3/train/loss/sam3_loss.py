@@ -1,6 +1,7 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates. All Rights Reserved
 
 import logging
+from typing import Optional
 
 import torch
 
@@ -80,12 +81,12 @@ class DummyLoss(torch.nn.Module):
     def __init__(
         self,
         core_loss_key: str = CORE_LOSS_KEY,
-        device: str = "cuda",
+        device: Optional[str] = None,  # default: cuda if available else cpu
         **kwargs,
     ):
         super().__init__()
         self.core_loss_key = core_loss_key
-        self.device = torch.device(device)
+        self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
 
     def forward(self, *args, **kwargs):
         return {self.core_loss_key: torch.tensor(0.0, device=self.device)}

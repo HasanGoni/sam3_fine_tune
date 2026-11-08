@@ -186,6 +186,8 @@ def main(args) -> None:
     cfg.launcher.num_nodes = (
         args.num_nodes if args.num_nodes is not None else cfg.launcher.num_nodes
     )
+    if args.accelerator is not None:  # e.g. --accelerator cpu to debug a GPU config without a GPU
+        cfg.trainer.accelerator = args.accelerator
     submitit_conf.use_cluster = (
         args.use_cluster if args.use_cluster is not None else submitit_conf.use_cluster
     )
@@ -349,6 +351,12 @@ if __name__ == "__main__":
         "--num-gpus", type=int, default=None, help="number of GPUS per node"
     )
     parser.add_argument("--num-nodes", type=int, default=None, help="Number of nodes")
+    parser.add_argument(
+        "--accelerator",
+        choices=["auto", "cuda", "cpu"],
+        default=None,
+        help="override trainer.accelerator (auto = cuda if a GPU is visible, else cpu)",
+    )
     args = parser.parse_args()
     args.use_cluster = bool(args.use_cluster) if args.use_cluster is not None else None
     register_omegaconf_resolvers()

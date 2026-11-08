@@ -152,6 +152,23 @@ bsub -q gpu_compute -gpu "num=1:j_exclusive=yes" -R "osrel=80 && ui==aiml-python
 is per-GPU), so OOM fixes are `train_batch_size` / `val_batch_size` /
 `category_chunk_size`, not GPU count.
 
+## CPU-only runs (no GPU)
+
+`trainer.accelerator` accepts `auto` (cuda if a GPU is visible, else cpu), `cuda` or `cpu`. The shipped configs say
+`cuda`, so on a machine without a GPU they fail immediately with a readable error rather than an NCCL/CUDA stack trace.
+To run any config on CPU (debugging only, a step on the 848M-parameter model takes minutes):
+
+```bash
+cd sam3/train && CUDA_VISIBLE_DEVICES="" python train.py -c configs/full_train_config.yaml --num-gpus 1 --num-nodes 1 --accelerator cpu
+```
+
+On CPU the trainer switches `distributed.backend: nccl` to `gloo`, autocast follows the real device, the focal loss uses
+its pure-PyTorch branch instead of the Triton kernel, and the GPU memory meter reads 0. Set `pin_memory: False` and
+small batch sizes / worker counts in the config to keep it usable. Image inference (`build_sam3_image_model(device="cpu")`),
+the evaluation helpers and the SAMBA-UNet CLIs (`trainer.device=cpu` / `device=cpu`) also run on CPU.
+Prove it with `CUDA_VISIBLE_DEVICES="" pytest tests`. The video predictor/tracker (`sam3/model/sam3_video_*`,
+`sam3_tracking_predictor.py`, `io_utils.py` video loaders) is intentionally CUDA-only and is not used by this pipeline.
+
 ## Debugging training crashes
 
 `FloatingPointError: Loss is nan`, or loss stuck at exactly `0.00000`:
