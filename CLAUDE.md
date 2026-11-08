@@ -105,6 +105,12 @@ in `sam3/train/trainer.py`) — **do not use the separate
 Full fine-tuning is recommended (per README benchmarks) and converges
 earlier.
 
+## Building / extending a dataset
+
+`sam3-dataset images=... masks=... category=... into=...` (`sam3_fine_tune/dataset/`, Hydra, console script registered in
+`pyproject.toml`; after pulling this change run `uv pip install -e . --no-deps` or `uv sync` to get the script) converts masks to COCO,
+splits train/test and creates / extends a category locally. See README "Shortcut: build or extend a dataset".
+
 ## Training config gotchas
 
 - **`category_chunk_size`** (two occurrences in the YAML: train and val) is

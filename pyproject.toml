@@ -102,6 +102,9 @@ sambaunet = [
     "transformers>=4.44",
 ]
 
+[project.scripts]
+sam3-dataset = "sam3_fine_tune.dataset.cli:main"
+
 [project.urls]
 "Homepage" = "https://github.com/facebookresearch/sam3"
 "Bug Tracker" = "https://github.com/facebookresearch/sam3/issues"
@@ -109,6 +112,10 @@ sambaunet = [
 # Was only packages = ["sam3", "sam3.model"] → `from sam3.sam...` failed (sam3.sam not installed).
 [tool.setuptools.packages.find]
 where = ["."]
+
+[tool.setuptools.package-data]
+"sam3_fine_tune.dataset" = ["conf/*.yaml"]
+"sam3_fine_tune.sambaunet" = ["conf/*.yaml"]
 
 [tool.setuptools.dynamic]
 version = {attr = "sam3.__version__"}

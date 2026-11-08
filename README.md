@@ -356,6 +356,44 @@ The merged `annotation.json` includes all categories:
 
 ---
 
+### Shortcut: build or extend a dataset with one command (`sam3-dataset`)
+
+Steps 2-3 can be replaced by one local command (no `ssh`/`bsub`) when you have a folder of images and a folder of binary
+masks for **one** category. It converts the masks to COCO polygons, splits them into train/test, and adds them to the
+dataset in `into` - creating the dataset, a new category, or extending an existing category:
+
+```bash
+sam3-dataset images=./imgs masks=./masks category="bond wire" into=/path/to/dataset test_fraction=0.2
+# equivalent: python -m sam3_fine_tune.dataset ...
+```
+
+It is Hydra-configured (`sam3_fine_tune/dataset/conf/dataset.yaml`), so every key is a `key=value` override:
+
+| Key | Meaning |
+|---|---|
+| `images`, `masks` | folders; an image and its mask are matched by file stem (png/jpg/tif/bmp). Unmatched files are reported, size mismatches abort before anything is written |
+| `category` | category name = the SAM3 text prompt |
+| `into` | dataset root `<into>/{train,test}/{images,annotation.json}`; created if missing |
+| `mode` | `auto` (default): `extend` if the name already exists in `into`, else `new`; or force `new` / `extend` |
+| `test_fraction`, `seed` | reproducible split of the new images (`0` = all to train) |
+| `prefix` | prepended to copied image names so they cannot collide (default: slug of the category) |
+| `dry_run=true` | print what would change, write nothing |
+
+Behaviour worth knowing:
+
+* Existing images, annotations and ids are never changed; new ids continue after the current maximum, and a new
+  category gets the **same** id in `train` and `test`.
+* Re-running the same command is safe: images whose prefixed name is already present are skipped (reported as
+  `skipped_existing`).
+* `annotation_merged.json` (read by the training configs) is created as a copy if absent; if it already exists - for
+  example consolidated with `merge_duplicate_photo_entries.py` - it receives the same additions instead of being replaced.
+* The result is validated (images exist, ids unique, polygons non-empty, categories known); problems are printed and the
+  exit code is non-zero.
+* Add one category per call; repeat the command for more categories. The HPC `.github/scripts/run_append_*.sh` helpers and
+  the notebook functions still work and are unchanged.
+
+---
+
 ## Step 4: Training Configuration
 
 ### Configuration Files

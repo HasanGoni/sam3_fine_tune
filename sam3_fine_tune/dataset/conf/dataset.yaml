@@ -1,0 +1,21 @@
+# Add images + binary masks of ONE category to a COCO fine-tuning dataset. Override anything from the CLI:
+#   sam3-dataset images=./imgs masks=./masks category="bond wire" into=/path/to/dataset test_fraction=0.2
+defaults:
+  - _self_
+  - override hydra/job_logging: none
+  - override hydra/hydra_logging: none
+
+images: ???              # folder of images
+masks: ???               # folder of binary masks, matched to images by file stem (any of png/jpg/tif/bmp)
+category: ???            # category name == the SAM3 text prompt
+into: ???                # dataset root <into>/{train,test}/{images,annotation.json}; created if missing
+mode: auto               # auto: extend if `category` already exists in `into`, else new | new | extend
+test_fraction: 0.2       # share of the new images that goes to test/ (0 = everything to train/)
+seed: 0                  # makes the train/test split reproducible
+prefix: null             # prepended to copied image names to avoid collisions (default: slug of the category)
+dry_run: false           # report what would change without writing anything
+
+hydra:
+  run:
+    dir: .               # do not create outputs/<date>/ directories
+  output_subdir: null
