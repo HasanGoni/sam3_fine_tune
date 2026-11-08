@@ -68,6 +68,8 @@ Acme Artifactory index (configured in `pyproject.toml`).
 - **`nbs/`** — nbdev notebooks, numbered as pipeline stages (`01_coco_format`
   … `13_dinov3_embedding_dedup`). Some are the source of truth for logic that
   helper scripts extract directly (see next point) rather than import.
+  `14_sambaunet_api_and_cli` is documentation only (SAMBA-UNet Python API +
+  Hydra CLI on synthetic data); it exports nothing.
 - **`.github/skills/`** + **`.github/scripts/`** — the HPC runbooks and the
   helper scripts they invoke (single-round-trip SSH validators/submitters).
 - **`scripts/`** — standalone analysis/poster scripts, several specific to
