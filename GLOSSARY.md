@@ -12,6 +12,7 @@ in SAM3 but are not used yet (issue #17).
 a score. The saved **combined mask** is the union of all instances.
 
 **Score / threshold**: SAM3's confidence per instance, and the cut-off below which an instance is dropped (an instance is kept when its score is `>` the threshold).
+
 **Sweep**: a prompt with a list of thresholds. The model runs once at the lowest; higher ones only re-filter by score. Each threshold gets a `thr_<t>/` output folder.
 
 **Base model**: SAM3 with the released `sam3.pt` weights, no fine-tuning. **Fine-tuned model**: a **checkpoint** produced

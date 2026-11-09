@@ -40,6 +40,10 @@ PALETTE = (
 )
 
 
+def _thr_dir(threshold: float) -> str:
+    return f"thr_{threshold:g}"
+
+
 @dataclass(frozen=True)
 class PromptSpec:
     text: str
@@ -140,8 +144,11 @@ def parse_prompts(
             if not thr:
                 raise ValueError(f"{label} list must not be empty")
             values = [_check_threshold(v, label) for v in thr]
-            if len(set(values)) != len(values):
-                raise ValueError(f"{label} list has duplicate values: {list(thr)}")
+            if len({_thr_dir(v) for v in values}) != len(values):
+                raise ValueError(
+                    f"{label} list has duplicate values (compared as {_thr_dir(0.5)[:4]}<t:g>, "
+                    f"the output folder name): {list(thr)}"
+                )
             thresholds = tuple(sorted(values))
         else:
             thresholds = (_check_threshold(thr, label),)
@@ -158,6 +165,8 @@ def parse_prompts(
 
 
 def _check_threshold(value: Any, label: str) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{label} must be a number in (0, 1], got {value!r}")
     try:
         number = float(value)
     except (TypeError, ValueError):
@@ -199,10 +208,6 @@ def overlay_mask(
     out = image.astype(np.float32).copy()
     out[mask] = (1 - alpha) * out[mask] + alpha * np.asarray(color, np.float32)
     return out.round().astype(np.uint8)
-
-
-def _thr_dir(threshold: float) -> str:
-    return f"thr_{threshold:g}"
 
 
 def _union(masks: Sequence[Any], shape: tuple[int, ...], name: str) -> np.ndarray:
@@ -272,7 +277,9 @@ def run_inference(
             unions = []
             for t in spec.thresholds:
                 keep = (
-                    [k for k, sc in enumerate(scores) if sc > t] if spec.sweep else None
+                    [k for k, sc in enumerate(scores) if np.float32(sc) > np.float32(t)]
+                    if spec.sweep
+                    else None
                 )
                 m_t = masks if keep is None else [masks[k] for k in keep]
                 s_t = scores if keep is None else [scores[k] for k in keep]

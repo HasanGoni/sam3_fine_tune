@@ -387,6 +387,8 @@ def test_sweep_in_multi_prompt_layout_and_single_number_unchanged(env):
     [
         ([], r"prompts\[0\] \('pin'\) threshold list must not be empty"),
         ([0.3, 0.3], "duplicate values"),
+        ([0.5, 0.5000001], "duplicate values"),
+        ([0.3, True], "must be a number"),
         ([0.3, 1.5], r"prompts\[0\] \('pin'\) threshold must be in"),
     ],
 )
@@ -405,3 +407,19 @@ def test_sweep_table_shows_instances_vs_threshold_totals(env):
     assert table.splitlines()[-1].split()[1:] == ["3", "2", "1"]
     plain = run(cfg(env), predictor=CountingPredictor())
     assert format_sweep_table(plain) == ""
+
+
+def test_sweep_compares_scores_in_float32_like_the_processor(env):
+    f32 = float(
+        np.float32(0.3)
+    )  # slightly above 0.3 as a double, equal to it in float32
+
+    def seg(path, prompt):
+        h, w = Image.open(path).size[::-1]
+        return [np.ones((h, w), bool)], [f32]
+
+    s = run(
+        cfg(env, prompt=None, prompts=[{"text": "pin", "threshold": [0.2, 0.3]}]),
+        predictor=CountingPredictor(seg),
+    )
+    assert [l["instances"] for l in s["images"][0]["sweep"]] == [1, 0]
