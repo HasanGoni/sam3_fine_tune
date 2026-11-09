@@ -251,6 +251,10 @@ and inference time — it must match exactly.
 
 ## Agent skills
 
+### Pull requests
+
+When writing a PR body, use the `/pr` skill.
+
 ### Issue tracker
 
 GitHub Issues on `HasanGoni/sam3_fine_tune`, via the `gh` CLI. See `docs/agents/issue-tracker.md`.
