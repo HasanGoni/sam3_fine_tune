@@ -8,6 +8,7 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 
 from .run import (
+    format_sweep_table,
     make_predictor,
     Predictor,
     resolve_device,
@@ -59,6 +60,9 @@ def main(cfg: DictConfig) -> None:
     print(
         f"{summary['model']} model, prompt(s) {texts}: {summary['num_images']} image(s) -> {cfg.out}"
     )
+    table = format_sweep_table(summary)
+    if table:
+        print(table)
 
 
 if __name__ == "__main__":

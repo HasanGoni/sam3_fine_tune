@@ -11,6 +11,7 @@ prompt: null             # ONE text prompt, e.g. the category_name used in train
 prompts: null            # several prompts, each with its own optional threshold; the prompt-entry shape is the
                          # extension point for other prompt kinds (only type: text exists today):
                          #   prompts='[{text: "bond wire", threshold: 0.4}, {text: pin}, {type: text, text: crack, threshold: 0.7}]'
+                         # `threshold` may be a list (sweep): {text: pin, threshold: [0.3, 0.5, 0.7]} -> one output set per threshold;
                          # entries without threshold use `threshold` below; each prompt gets its own masks/<slug>/ folder
 out: ???                 # output folder: masks/, overlays/, summary.json (created; reruns overwrite)
 sam3_checkpoint: ???     # base sam3.pt (required by the config for base and fine-tuned runs; read only for base)

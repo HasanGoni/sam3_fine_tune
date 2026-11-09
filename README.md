@@ -173,6 +173,19 @@ sam3-infer images=./imgs out=./pred sam3_checkpoint=... bpe_path=... threshold=0
   'prompts=[{text: "bond wire", threshold: 0.4}, {text: pin}, {type: text, text: crack, threshold: 0.7}]'
 ```
 
+**Threshold sweep:** give a prompt a list of thresholds to compare them side by side.
+
+```bash
+sam3-infer images=./imgs out=./pred sam3_checkpoint=... bpe_path=... \
+  'prompts=[{text: "bond wire", threshold: [0.3, 0.5, 0.7]}]'
+```
+
+The model runs once per image and prompt, at the lowest threshold; the higher ones only re-filter the instances by score,
+so a sweep costs almost nothing extra. Masks and overlays get one `thr_<t>/` folder per threshold
+(`masks/[<prompt>/]thr_0.5/<name>.png`, `overlays/[<prompt>/]thr_0.5/<name>.png`), `summary.json` has a `sweep` list per
+image (threshold, instances, pixels, scores), and a table of total instances vs threshold per prompt is printed. A
+single number behaves as before; `overlays/<name>.png` shows every prompt at its lowest threshold.
+
 The image backbone runs once per image and is reused for every prompt. With several prompts the masks go to
 `out/masks/<prompt>/<name>.png`, the overlay shows one colour per prompt, and `summary.json` has a per-prompt entry
 (instances, foreground pixels, scores, threshold used) under each image. Invalid config (empty list, duplicate texts,

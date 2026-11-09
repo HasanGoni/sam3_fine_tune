@@ -43,8 +43,17 @@ PALETTE = (
 @dataclass(frozen=True)
 class PromptSpec:
     text: str
-    threshold: float
+    thresholds: tuple[float, ...]  # ascending, unique; more than one means a sweep
     type: str = "text"
+
+    @property
+    def threshold(self) -> float:
+        """The lowest threshold: the model runs once at this, higher ones only re-filter by score."""
+        return self.thresholds[0]
+
+    @property
+    def sweep(self) -> bool:
+        return len(self.thresholds) > 1
 
     @property
     def slug(self) -> str:
@@ -124,12 +133,19 @@ def parse_prompts(
         if not isinstance(text, str) or not text.strip():
             raise ValueError(f"{where}: text must be a non-empty string")
         thr = entry.get("threshold")
-        thr = (
-            default_threshold
-            if thr is None
-            else _check_threshold(thr, f"{where} ({text!r}) threshold")
-        )
-        specs.append(PromptSpec(text=text, threshold=thr, type=kind))
+        label = f"{where} ({text!r}) threshold"
+        if thr is None:
+            thresholds: tuple[float, ...] = (default_threshold,)
+        elif isinstance(thr, (list, tuple)):
+            if not thr:
+                raise ValueError(f"{label} list must not be empty")
+            values = [_check_threshold(v, label) for v in thr]
+            if len(set(values)) != len(values):
+                raise ValueError(f"{label} list has duplicate values: {list(thr)}")
+            thresholds = tuple(sorted(values))
+        else:
+            thresholds = (_check_threshold(thr, label),)
+        specs.append(PromptSpec(text=text, thresholds=thresholds, type=kind))
     for field in ("text", "slug"):
         dup = sorted(
             v for v, n in Counter(getattr(s, field) for s in specs).items() if n > 1
@@ -185,6 +201,30 @@ def overlay_mask(
     return out.round().astype(np.uint8)
 
 
+def _thr_dir(threshold: float) -> str:
+    return f"thr_{threshold:g}"
+
+
+def _union(masks: Sequence[Any], shape: tuple[int, ...], name: str) -> np.ndarray:
+    union = np.zeros(shape, bool)
+    for m in masks:
+        m = np.asarray(m).astype(bool)
+        if m.shape != union.shape:
+            raise ValueError(
+                f"{name}: predicted mask {m.shape} does not match image {union.shape}"
+            )
+        union |= m
+    return union
+
+
+def _stats(masks: Sequence[Any], scores: Sequence[float], union: np.ndarray) -> dict:
+    return {
+        "instances": len(masks),
+        "foreground_pixels": int(union.sum()),
+        "scores": [round(float(s), 4) for s in scores],
+    }
+
+
 def run_inference(
     image_paths: Sequence[Path],
     specs: Sequence[PromptSpec],
@@ -192,68 +232,127 @@ def run_inference(
     predictor: Predictor,
     meta: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Write per-prompt masks, one multi-colour overlay per image and ``out/summary.json``.
+    """Write per-prompt masks, overlays and ``out/summary.json``.
 
-    One prompt: ``masks/<stem>.png``. Several: ``masks/<prompt-slug>/<stem>.png``. Masks are 0/255 (union of instances).
+    Masks (0/255, union of instances): ``masks/<stem>.png`` for one prompt, ``masks/<prompt-slug>/<stem>.png`` for
+    several. A prompt with several thresholds (a sweep) gets one extra ``thr_<t>/`` level per threshold, in masks and in
+    ``overlays/[<slug>/]thr_<t>/<stem>.png``; ``overlays/<stem>.png`` shows every prompt at its lowest threshold.
+    The model runs once per image and prompt, at the lowest threshold; higher ones re-filter by score (``> t``, as the
+    processor does).
     """
     out = Path(out)
     multi = len(specs) > 1
-    mask_dirs = {
-        s.slug: out / "masks" / s.slug if multi else out / "masks" for s in specs
-    }
-    for d in (*mask_dirs.values(), out / "overlays"):
-        d.mkdir(parents=True, exist_ok=True)
+
+    def sub(root: str, spec: PromptSpec, threshold: float | None = None) -> Path:
+        d = out / root / spec.slug if multi else out / root
+        return d / _thr_dir(threshold) if threshold is not None else d
+
+    for spec in specs:
+        for t in spec.thresholds if spec.sweep else (None,):
+            sub("masks", spec, t).mkdir(parents=True, exist_ok=True)
+            if spec.sweep:
+                sub("overlays", spec, t).mkdir(parents=True, exist_ok=True)
+    (out / "overlays").mkdir(parents=True, exist_ok=True)
     rows = []
     for path in image_paths:
         path = Path(path)
         rgb = np.asarray(Image.open(path).convert("RGB"))
         handle = predictor.encode(
             path
-        )  # image backbone: once per image, shared by all prompts
+        )  # backbone: once per image, shared by all prompts
         overlay, per_prompt = rgb, []
         for idx, spec in enumerate(specs):
-            masks, scores = predictor.segment(handle, spec)
-            union = np.zeros(rgb.shape[:2], bool)
-            for m in masks:
-                m = np.asarray(m).astype(bool)
-                if m.shape != union.shape:
-                    raise ValueError(
-                        f"{path.name}: predicted mask {m.shape} does not match image {union.shape}"
+            color = PALETTE[idx % len(PALETTE)]
+            masks, scores = predictor.segment(handle, spec)  # decoder: once per prompt
+            if len(masks) != len(scores):
+                raise ValueError(
+                    f"{path.name}: {len(masks)} masks but {len(scores)} scores for {spec.text!r}"
+                )
+            levels = []
+            lowest = np.zeros(rgb.shape[:2], bool)
+            for t in spec.thresholds:
+                keep = (
+                    [k for k, sc in enumerate(scores) if sc > t] if spec.sweep else None
+                )
+                m_t = masks if keep is None else [masks[k] for k in keep]
+                s_t = scores if keep is None else [scores[k] for k in keep]
+                union = _union(m_t, rgb.shape[:2], path.name)
+                if t == spec.threshold:
+                    lowest = union
+                mask_dir = sub("masks", spec, t if spec.sweep else None)
+                Image.fromarray(union.astype(np.uint8) * 255).save(
+                    mask_dir / f"{path.stem}.png"
+                )
+                if spec.sweep:
+                    Image.fromarray(overlay_mask(rgb, union, color)).save(
+                        sub("overlays", spec, t) / f"{path.stem}.png"
                     )
-                union |= m
-            Image.fromarray(union.astype(np.uint8) * 255).save(
-                mask_dirs[spec.slug] / f"{path.stem}.png"
-            )
-            overlay = overlay_mask(overlay, union, PALETTE[idx % len(PALETTE)])
-            per_prompt.append(
-                {
-                    "prompt": spec.text,
-                    "threshold": spec.threshold,
-                    "instances": len(masks),
-                    "foreground_pixels": int(union.sum()),
-                    "scores": [round(float(s), 4) for s in scores],
-                }
-            )
+                levels.append({"threshold": t, **_stats(m_t, s_t, union)})
+            overlay = overlay_mask(overlay, lowest, color)
+            entry: dict[str, Any] = {"prompt": spec.text}
+            if spec.sweep:
+                entry["sweep"] = levels
+            else:
+                entry.update(levels[0])
+            per_prompt.append(entry)
         Image.fromarray(overlay).save(out / "overlays" / f"{path.stem}.png")
         row: dict[str, Any] = {"image": path.name}
         if multi:
             row["prompts"] = per_prompt
         else:  # single-prompt layout from #13 is unchanged
-            row.update({key: v for key, v in per_prompt[0].items() if key != "prompt"})
+            row.update({k: v for k, v in per_prompt[0].items() if k != "prompt"})
         rows.append(row)
-    summary = {
+    summary: dict[str, Any] = {
         **(meta or {}),
-        "prompts": [
-            {"type": s.type, "text": s.text, "threshold": s.threshold} for s in specs
-        ],
+        "prompts": [_prompt_meta(s) for s in specs],
         "num_images": len(rows),
         "images": rows,
     }
     if not multi:
         summary["prompt"] = specs[0].text
-        summary["threshold"] = specs[0].threshold
+        if not specs[0].sweep:
+            summary["threshold"] = specs[0].threshold
     (out / SUMMARY_NAME).write_text(json.dumps(summary, indent=2))
     return summary
+
+
+def _prompt_meta(spec: PromptSpec) -> dict[str, Any]:
+    meta: dict[str, Any] = {"type": spec.type, "text": spec.text}
+    if spec.sweep:
+        meta["thresholds"] = list(spec.thresholds)
+    else:
+        meta["threshold"] = spec.threshold
+    return meta
+
+
+def format_sweep_table(summary: dict[str, Any]) -> str:
+    """Compact instances-vs-threshold table per sweep prompt (totals over all images); '' when nothing swept."""
+    totals: dict[str, dict[float, int]] = {}
+    for row in summary["images"]:
+        entries = (
+            row["prompts"]
+            if "prompts" in row
+            else [{"prompt": summary["prompt"], **row}]
+        )
+        for e in entries:
+            for lvl in e.get("sweep", []):
+                by_t = totals.setdefault(e["prompt"], {})
+                by_t[lvl["threshold"]] = (
+                    by_t.get(lvl["threshold"], 0) + lvl["instances"]
+                )
+    blocks = []
+    for prompt, by_t in totals.items():
+        ts = sorted(by_t)
+        width = max(len(f"{t:g}") for t in ts + [0.0]) + 2
+        blocks.append(
+            f"{prompt!r}: instances vs threshold ({summary['num_images']} image(s))\n"
+            + "  threshold  "
+            + "".join(f"{t:g}".rjust(width) for t in ts)
+            + "\n"
+            + "  instances  "
+            + "".join(str(by_t[t]).rjust(width) for t in ts)
+        )
+    return "\n".join(blocks)
 
 
 def make_predictor(

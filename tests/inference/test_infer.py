@@ -12,6 +12,7 @@ from PIL import Image
 
 from sam3_fine_tune.inference.cli import run
 from sam3_fine_tune.inference.run import (
+    format_sweep_table,
     parse_prompts,
     Predictor,
     PromptSpec,
@@ -161,7 +162,7 @@ def test_mask_size_mismatch_is_an_error(env, tmp_path):
     with pytest.raises(ValueError, match="does not match"):
         run_inference(
             [env / "imgs" / "a.png"],
-            [PromptSpec("p", 0.5)],
+            [PromptSpec("p", (0.5,))],
             tmp_path / "o",
             CountingPredictor(lambda p, t: ([np.zeros((3, 3), bool)], [1.0])),
         )
@@ -292,3 +293,115 @@ def test_text_type_is_the_default_and_existing_shape_is_unchanged():
     spec = parse_prompts(None, [{"text": "pin"}], 0.4)[0]
     assert (spec.type, spec.text, spec.threshold) == ("text", "pin", 0.4)
     assert parse_prompts("pin", None, 0.4) == [spec]
+
+
+def sweep_segment(path, prompt):
+    """Three instances with scores 0.9 / 0.6 / 0.35 (disjoint blocks) on a.png, none on b.png."""
+    h, w = Image.open(path).size[::-1]
+    ms = []
+    for k in range(3):
+        m = np.zeros((h, w), bool)
+        m[k * 10 : k * 10 + 4, 0:4] = True
+        ms.append(m)
+    return (ms, [0.9, 0.6, 0.35]) if path.name == "a.png" else ([], [])
+
+
+SWEEP = [{"text": "pin", "threshold": [0.8, 0.3, 0.5]}]
+
+
+def test_threshold_list_yields_separate_outputs_and_per_threshold_summary(env):
+    pred = CountingPredictor(sweep_segment)
+    s = run(cfg(env, prompt=None, prompts=SWEEP), predictor=pred)
+    out = env / "out"
+    assert sorted(p.name for p in (out / "masks").iterdir()) == [
+        "thr_0.3",
+        "thr_0.5",
+        "thr_0.8",
+    ]
+    px = {
+        t: int((np.asarray(Image.open(out / "masks" / f"thr_{t}" / "a.png")) > 0).sum())
+        for t in ("0.3", "0.5", "0.8")
+    }
+    assert px == {"0.3": 48, "0.5": 32, "0.8": 16}
+    assert (out / "overlays" / "thr_0.5" / "a.png").is_file()
+    assert (out / "overlays" / "a.png").is_file()
+    a, b = s["images"]
+    assert [(l["threshold"], l["instances"]) for l in a["sweep"]] == [
+        (0.3, 3),
+        (0.5, 2),
+        (0.8, 1),
+    ]
+    assert [l["instances"] for l in b["sweep"]] == [0, 0, 0]
+    assert s["prompts"] == [
+        {"type": "text", "text": "pin", "thresholds": [0.3, 0.5, 0.8]}
+    ]
+    assert json.loads((out / "summary.json").read_text()) == s
+
+
+def test_sweep_runs_decoder_once_per_image_and_prompt_at_lowest_threshold(env):
+    pred = CountingPredictor(sweep_segment)
+    run(cfg(env, prompt=None, prompts=SWEEP + [{"text": "crack"}]), predictor=pred)
+    assert pred.calls["encode"] == 2
+    pin_calls = [c for c in pred.calls["segment"] if c[1] == "pin"]
+    assert pin_calls == [("a.png", "pin", 0.3), ("b.jpg", "pin", 0.3)]
+
+
+def test_higher_thresholds_never_return_more_instances(env):
+    rng = np.random.default_rng(1)
+
+    def random_segment(path, prompt):
+        h, w = Image.open(path).size[::-1]
+        n = int(rng.integers(0, 8))
+        return [np.zeros((h, w), bool) for _ in range(n)], list(rng.uniform(0.01, 1, n))
+
+    ts = [0.05, 0.2, 0.4, 0.6, 0.8, 0.95]
+    for trial in range(20):
+        s = run(
+            cfg(env, prompt=None, prompts=[{"text": "pin", "threshold": ts}]),
+            predictor=CountingPredictor(random_segment),
+        )
+        for row in s["images"]:
+            counts = [l["instances"] for l in row["sweep"]]
+            assert counts == sorted(counts, reverse=True)
+
+
+def test_sweep_in_multi_prompt_layout_and_single_number_unchanged(env):
+    pred = CountingPredictor()
+    s = run(
+        cfg(
+            env,
+            prompt=None,
+            prompts=[{"text": "pin", "threshold": [0.3, 0.8]}, {"text": "crack"}],
+        ),
+        predictor=pred,
+    )
+    out = env / "out"
+    assert (out / "masks" / "pin" / "thr_0.3" / "a.png").is_file()
+    assert (out / "masks" / "crack" / "a.png").is_file()  # plain prompt: no thr_ level
+    a = s["images"][0]["prompts"]
+    assert "sweep" in a[0] and "sweep" not in a[1] and a[1]["threshold"] == 0.5
+
+
+@pytest.mark.parametrize(
+    "thr,msg",
+    [
+        ([], r"prompts\[0\] \('pin'\) threshold list must not be empty"),
+        ([0.3, 0.3], "duplicate values"),
+        ([0.3, 1.5], r"prompts\[0\] \('pin'\) threshold must be in"),
+    ],
+)
+def test_invalid_threshold_lists_fail_before_model_load(env, thr, msg):
+    with pytest.raises(SystemExit, match=msg):
+        run(cfg(env, prompt=None, prompts=[{"text": "pin", "threshold": thr}]))
+    assert not (env / "out").exists()
+
+
+def test_sweep_table_shows_instances_vs_threshold_totals(env):
+    s = run(
+        cfg(env, prompt=None, prompts=SWEEP), predictor=CountingPredictor(sweep_segment)
+    )
+    table = format_sweep_table(s)
+    assert "'pin'" in table and "threshold" in table
+    assert table.splitlines()[-1].split()[1:] == ["3", "2", "1"]
+    plain = run(cfg(env), predictor=CountingPredictor())
+    assert format_sweep_table(plain) == ""
