@@ -29,7 +29,7 @@ cd sam3_fine_tune
 uv venv --python 3.12
 source .venv/bin/activate
 uv sync
-uv pip install -e . --no-deps   # once: installs the `sam3-dataset` and `sam3-finetune` commands
+uv pip install -e . --no-deps   # once: installs the `sam3-dataset`, `sam3-finetune` and `sam3-infer` commands
 ```
 
 Optional: `uv sync --extra sambaunet` for the SAMBA-UNet baseline. Check the install with `pytest tests`.
@@ -58,6 +58,7 @@ sam3-finetune --data-root /path/to/dataset \
 |---|---|---|
 | `sam3-dataset` | `python -m sam3_fine_tune.dataset` | Hydra CLI: images + masks → COCO, train/test split, create or extend a category |
 | `sam3-finetune` | `python -m sam3_fine_tune.finetune` | train SAM3, then evaluate the best checkpoint on `test/` |
+| `sam3-infer` | `python -m sam3_fine_tune.inference` | base or fine-tuned SAM3 with one text prompt on a folder of images |
 | – | `python -m sam3_fine_tune.sambaunet.train` / `.evaluate` | Hydra CLIs for the SAMBA-UNet baseline |
 
 ---
@@ -150,7 +151,24 @@ python train.py -c configs/my_config.yaml --num-gpus 1 --num-nodes 1
 
 ## Inference and further evaluation
 
-Notebooks in `nbs/` (a `sam3-infer` command is planned, see issues #13–#17):
+### Segment a folder with one text prompt (`sam3-infer`)
+
+```bash
+# base SAM3
+sam3-infer images=./imgs prompt="bond wire" out=./pred \
+           sam3_checkpoint=/path/to/sam3.pt bpe_path=/path/to/bpe_simple_vocab_16e6.txt.gz
+# fine-tuned model: add the checkpoint (the base sam3.pt is still needed to build the model)
+sam3-infer ... checkpoint=experiments/run1/checkpoints/checkpoint.pt
+```
+
+Writes `out/masks/<name>.png` (0/255, union of all instances), `out/overlays/<name>.png` and `out/summary.json`
+(per image: instances, foreground pixels, scores; plus prompt, threshold, device, checkpoint). A rerun overwrites the
+same files. Options: `threshold=0.5`, `device=auto|cpu|cuda` (defaults in `sam3_fine_tune/inference/conf/infer.yaml`).
+Also runs as `python -m sam3_fine_tune.inference`.
+
+### Notebooks
+
+Further inference and evaluation steps in `nbs/`:
 
 | Notebook | Use |
 |---|---|
@@ -224,7 +242,7 @@ sam3_fine_tune/
 ├── sambaunet/         SAMBA-UNet baseline
 ├── preprocessing/     mask → COCO, merge helpers, DINOv3 diversity rebalancing
 ├── evaluation/        single / multi-class evaluation pipelines
-└── inference/         decoder inference helper
+└── inference/         sam3-infer, decoder inference helper
 nbs/                   numbered notebooks (01 coco_format … 14 sambaunet_api_and_cli)
 tests/                 pytest suite
 scripts/               analysis and poster scripts

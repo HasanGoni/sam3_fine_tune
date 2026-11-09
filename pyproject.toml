@@ -105,6 +105,7 @@ sambaunet = [
 [project.scripts]
 sam3-dataset = "sam3_fine_tune.dataset.cli:main"
 sam3-finetune = "sam3_fine_tune.finetune.cli:main"
+sam3-infer = "sam3_fine_tune.inference.cli:main"
 
 [project.urls]
 "Homepage" = "https://github.com/facebookresearch/sam3"
@@ -116,6 +117,7 @@ where = ["."]
 
 [tool.setuptools.package-data]
 "sam3_fine_tune.dataset" = ["conf/*.yaml"]
+"sam3_fine_tune.inference" = ["conf/*.yaml"]
 "sam3_fine_tune.sambaunet" = ["conf/*.yaml"]
 
 [tool.setuptools.dynamic]

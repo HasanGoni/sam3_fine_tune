@@ -1,0 +1,21 @@
+# Run base or fine-tuned SAM3 with ONE text prompt on a folder of images. Override anything from the CLI:
+#   sam3-infer images=./imgs prompt="bond wire" out=./pred sam3_checkpoint=sam3.pt bpe_path=bpe_simple_vocab_16e6.txt.gz
+#   sam3-infer ... checkpoint=experiments/run1/checkpoints/checkpoint.pt     # fine-tuned model instead of base
+defaults:
+  - _self_
+  - override hydra/job_logging: none
+  - override hydra/hydra_logging: none
+
+images: ???              # folder of images (png/jpg/jpeg/tif/tiff/bmp/webp), not searched recursively
+prompt: ???              # text prompt, e.g. the category_name used in training
+out: ???                 # output folder: masks/, overlays/, summary.json (created; reruns overwrite)
+sam3_checkpoint: ???     # base sam3.pt (needed for base AND fine-tuned runs)
+bpe_path: ???            # bpe_simple_vocab_16e6.txt.gz
+checkpoint: null         # fine-tuned checkpoint; null -> base SAM3 weights
+threshold: 0.5           # confidence threshold for keeping an instance
+device: auto             # auto | cpu | cuda
+
+hydra:
+  run:
+    dir: .               # do not create outputs/<date>/ directories
+  output_subdir: null
