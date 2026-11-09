@@ -95,7 +95,7 @@ def make_predictor(sam3_checkpoint, bpe_path, device: str, threshold: float, che
     model = build_sam3_image_model(bpe_path=str(bpe_path), device=device, eval_mode=True,
                                    checkpoint_path=str(sam3_checkpoint), load_from_HF=False)
     if checkpoint is not None:
-        weights = torch.load(checkpoint, map_location="cpu", weights_only=False)
+        weights = torch.load(checkpoint, map_location="cpu", weights_only=True)
         model.load_state_dict(weights["model"])
         model.eval()
     processor = Sam3Processor(model, device=device, confidence_threshold=threshold)
