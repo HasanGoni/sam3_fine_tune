@@ -1,4 +1,6 @@
 # One-time setup: `uvx pre-commit install`. Mirrors CI (.github/workflows/standards.yml).
+default_language_version:
+  python: python3.12
 repos:
   - repo: local
     hooks:
@@ -15,3 +17,9 @@ repos:
         entry: .venv/bin/python -m pytest tests/test_repo_standards.py -q
         pass_filenames: false
         types: [python]
+      - id: mypy
+        name: mypy (sam3-infer)
+        language: python
+        additional_dependencies: [mypy==1.13.0, numpy, omegaconf, hydra-core, types-Pillow]
+        entry: mypy --follow-imports=silent --ignore-missing-imports --disallow-untyped-defs --warn-return-any
+        files: ^sam3_fine_tune/inference/(run|cli)\.py$

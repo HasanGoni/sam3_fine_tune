@@ -66,7 +66,7 @@ def resolve_device(device: str, cuda_available: bool) -> str:
     return ("cuda" if cuda_available else "cpu") if device == "auto" else device
 
 
-def list_images(folder) -> list[Path]:
+def list_images(folder: str | Path) -> list[Path]:
     folder = Path(folder)
     if not folder.is_dir():
         raise ValueError(f"images folder not found: {folder}")
@@ -87,7 +87,11 @@ def list_images(folder) -> list[Path]:
     return found
 
 
-def parse_prompts(prompt, prompts, default_threshold) -> list[PromptSpec]:
+def parse_prompts(
+    prompt: str | None,
+    prompts: Sequence[Any] | None,
+    default_threshold: float,
+) -> list[PromptSpec]:
     """Normalise ``prompt`` (one string) or ``prompts`` (list of ``{text, type?, threshold?}``) into ``PromptSpec``s.
 
     Raises ``ValueError`` naming the offending entry; entries without a threshold use ``default_threshold``.
@@ -100,7 +104,7 @@ def parse_prompts(prompt, prompts, default_threshold) -> list[PromptSpec]:
         raise ValueError("set either prompt=<text> or prompts=[...], not both")
     if not has_prompt and not prompts:
         raise ValueError("no prompts: set prompt=<text> or prompts=[{text: ...}, ...]")
-    entries = [{"text": prompt}] if has_prompt else list(prompts)
+    entries: list[Any] = [{"text": prompt}] if has_prompt else list(prompts or [])
     specs = []
     for i, entry in enumerate(entries):
         where = f"prompts[{i}]"
@@ -137,25 +141,25 @@ def parse_prompts(prompt, prompts, default_threshold) -> list[PromptSpec]:
     return specs
 
 
-def _check_threshold(value, label) -> float:
+def _check_threshold(value: Any, label: str) -> float:
     try:
-        value = float(value)
+        number = float(value)
     except (TypeError, ValueError):
         raise ValueError(f"{label} must be a number in (0, 1], got {value!r}") from None
-    if not 0 < value <= 1:
-        raise ValueError(f"{label} must be in (0, 1], got {value}")
-    return value
+    if not 0 < number <= 1:
+        raise ValueError(f"{label} must be in (0, 1], got {number}")
+    return number
 
 
 def validate_inputs(
     *,
-    images,
-    prompt=None,
-    prompts=None,
-    sam3_checkpoint,
-    bpe_path,
-    checkpoint,
-    threshold,
+    images: str | Path,
+    prompt: str | None = None,
+    prompts: Sequence[Any] | None = None,
+    sam3_checkpoint: str | Path,
+    bpe_path: str | Path,
+    checkpoint: str | Path | None,
+    threshold: float,
 ) -> "tuple[list[Path], list[PromptSpec]]":
     """Fail early (before any model is loaded) with a message that says what to fix. Returns (images, prompt specs)."""
     specs = parse_prompts(prompt, prompts, threshold)
@@ -171,7 +175,10 @@ def validate_inputs(
 
 
 def overlay_mask(
-    image: np.ndarray, mask: np.ndarray, color=(255, 0, 0), alpha: float = 0.5
+    image: np.ndarray,
+    mask: np.ndarray,
+    color: Sequence[int] = (255, 0, 0),
+    alpha: float = 0.5,
 ) -> np.ndarray:
     out = image.astype(np.float32).copy()
     out[mask] = (1 - alpha) * out[mask] + alpha * np.asarray(color, np.float32)
@@ -181,10 +188,10 @@ def overlay_mask(
 def run_inference(
     image_paths: Sequence[Path],
     specs: Sequence[PromptSpec],
-    out,
+    out: str | Path,
     predictor: Predictor,
-    meta: dict | None = None,
-) -> dict:
+    meta: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Write per-prompt masks, one multi-colour overlay per image and ``out/summary.json``.
 
     One prompt: ``masks/<stem>.png``. Several: ``masks/<prompt-slug>/<stem>.png``. Masks are 0/255 (union of instances).
@@ -228,7 +235,7 @@ def run_inference(
                 }
             )
         Image.fromarray(overlay).save(out / "overlays" / f"{path.stem}.png")
-        row = {"image": path.name}
+        row: dict[str, Any] = {"image": path.name}
         if multi:
             row["prompts"] = per_prompt
         else:  # single-prompt layout from #13 is unchanged
@@ -250,7 +257,10 @@ def run_inference(
 
 
 def make_predictor(
-    sam3_checkpoint, bpe_path, device: str, checkpoint=None
+    sam3_checkpoint: str | Path,
+    bpe_path: str | Path,
+    device: str,
+    checkpoint: str | Path | None = None,
 ) -> Predictor:
     """Base SAM3 from ``sam3_checkpoint``, or the full fine-tuned weights from ``checkpoint`` when given."""
     import torch
@@ -280,11 +290,11 @@ def make_predictor(
     processor = Sam3Processor(model, device=device)
 
     @torch.no_grad()
-    def encode(image_path: Path):
+    def encode(image_path: Path) -> Any:
         return processor.set_image(Image.open(image_path).convert("RGB"))
 
     @torch.no_grad()
-    def segment(state, spec: PromptSpec):
+    def segment(state: Any, spec: PromptSpec) -> "tuple[list[np.ndarray], list[float]]":
         # text features replace the previous prompt's; image features in ``state`` are reused
         processor.confidence_threshold = spec.threshold
         out = processor.set_text_prompt(state=state, prompt=spec.text)

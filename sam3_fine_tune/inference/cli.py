@@ -2,20 +2,30 @@
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 import hydra
 from omegaconf import DictConfig, OmegaConf
 
-from .run import make_predictor, resolve_device, run_inference, validate_inputs
+from .run import (
+    make_predictor,
+    Predictor,
+    resolve_device,
+    run_inference,
+    validate_inputs,
+)
 
 
-def run(cfg: DictConfig, predictor=None) -> dict:
+def run(cfg: DictConfig, predictor: Predictor | None = None) -> dict[str, Any]:
     """Validate, then run. ``predictor`` (a ``Predictor``) is injectable; without it the real SAM3 is loaded."""
     try:
         prompts = cfg.get("prompts")
         paths, specs = validate_inputs(
             images=cfg.images,
             prompt=cfg.get("prompt"),
-            prompts=None if prompts is None else OmegaConf.to_container(prompts),
+            prompts=None
+            if prompts is None
+            else cast(list[Any], OmegaConf.to_container(prompts)),
             sam3_checkpoint=cfg.sam3_checkpoint,
             bpe_path=cfg.bpe_path,
             checkpoint=cfg.checkpoint,

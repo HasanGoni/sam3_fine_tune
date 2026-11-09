@@ -29,5 +29,6 @@ judgement calls. Use the terms in `GLOSSARY.md`.
 ## Docs and claims
 
 - A feature is documented in `README.md` in the same change, next to the training and evaluation shortcuts.
+- A change in behaviour updates the `GLOSSARY.md` entries and the rules in this file that it makes stale.
 - A PR or issue comment says what was verified and what was not (for example: no real `sam3.pt` run, no GPU run).
 - Record the reason for a surprising choice in the code or an ADR (`docs/adr/`), not in the commit message alone.
