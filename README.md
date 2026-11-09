@@ -66,6 +66,18 @@ configuration.
 
 If you want to train on a new category or a different domain, follow the full pipeline from [Step 1](#step-1-data-preparation) through [Step 7](#step-7-evaluation). Two training modes were tried (decoder and full), however, full finetuning has performed better and even converged earlier. Hence, it would be recommended to do full-finetuning.
 
+**Fastest path (two commands, no scheduler needed):**
+
+```bash
+# 1) images + binary masks -> COCO dataset (new dataset, new category, or extend a category); repeat per category
+sam3-dataset images=./imgs masks=./masks category="bond wire" into=/path/to/dataset
+# 2) train, then evaluate the best checkpoint on test/ automatically
+sam3-finetune --data-root /path/to/dataset --sam3-checkpoint /path/to/sam3.pt --bpe-path /path/to/bpe_simple_vocab_16e6.txt.gz --epochs 10
+```
+
+Details: [`sam3-dataset`](#shortcut-build-or-extend-a-dataset-with-one-command-sam3-dataset) and
+[`sam3-finetune`](#shortcut-train-and-evaluate-with-one-command). The step-by-step notebook/HPC route below still works.
+
 ---
 
 ## Overview: Full Fine-Tuning vs. Decoder-Only Fine-Tuning
@@ -102,7 +114,18 @@ cd sam3_fine_tune
 uv venv --python 3.12
 source .venv/bin/activate
 uv sync
+uv pip install -e . --no-deps   # once: creates the `sam3-dataset` and `sam3-finetune` commands (a plain `uv sync` also does)
 ```
+
+Optional extras: `uv sync --extra sambaunet` for the SAMBA-UNet baseline. Run the tests with `pytest tests`.
+
+### Command-line tools
+
+| Command | Also runs as | Purpose |
+|---|---|---|
+| `sam3-dataset` | `python -m sam3_fine_tune.dataset` | Hydra CLI: images + masks -> COCO, train/test split, create or extend a category |
+| `sam3-finetune` | `python -m sam3_fine_tune.finetune` | argparse CLI: train SAM3, then evaluate the best checkpoint on `test/` |
+| - | `python -m sam3_fine_tune.sambaunet.train` / `.evaluate` | Hydra CLIs for the SAMBA-UNet baseline |
 
 ### Required paths:
 
@@ -135,11 +158,22 @@ sam3/
 ├── 06_visualization_pipeline.ipynb            # Visualize predictions vs. ground truth masks (Optional)
 ├── 07_img_to_mask.ipynb                       # Generate masks and overlays from a fine-tuned checkpoint (Optional)
 ├── 08_correct_incorrect_filter.ipynb          # Filter images into correct/incorrect predictions (Optional)
+├── 14_sambaunet_api_and_cli.ipynb             # SAMBA-UNet Python API + CLI tutorial (synthetic data, CPU)
 └── sam3/
     └── train/
         └── configs/
             ├── decoder_train_config.yaml      # Decoder-only fine-tuning config
             └── full_train_config.yaml         # Full fine-tuning config
+```
+
+Command-line tools and their tests:
+
+```
+sam3_fine_tune/
+├── dataset/      # `sam3-dataset`: masks -> COCO, split, new/extend category (conf/dataset.yaml)
+├── finetune/     # `sam3-finetune`: config patching, train.py launch, test-set evaluation
+└── sambaunet/    # SAMBA-UNet baseline: model, Hydra train/evaluate CLIs
+tests/            # pytest: dataset/, finetune/, sambaunet/, cpu_compat/
 ```
 
 ## Pipeline Overview
@@ -154,6 +188,7 @@ sam3/
 │                    ↓                                            │
 │  2. COCO CONVERSION (01_coco_format.ipynb | preprocessing/coco_format.py)     │
 │     └── Convert masks to COCO polygon format                    │
+│         shortcut: `sam3-dataset` (steps 2+3 in one command)     │
 │                    ↓                                            │
 │  3. [Optional] MERGE DATASETS (02_merge_dataset.ipynb)          │
 │     └── Combine multiple classes into one dataset               │
@@ -163,6 +198,7 @@ sam3/
 │                    ↓                                            │
 │  5. RUN TRAINING (sam3/train/train.py)                          │
 │     └── Train decoder-only or full fine-tuning                  │
+│         shortcut: `sam3-finetune` (train + test-set eval)       │
 │                    ↓                                            │
 │  6. INFERENCE (03_inference.decoder_inference.ipynb)            │
 │     └── Load checkpoint and run prediction                      │
@@ -648,6 +684,11 @@ Filters test images into two groups — correctly segmented and incorrectly segm
 ## Training Commands Quick Reference
 
 ```bash
+# Local / any machine (no scheduler):
+sam3-dataset images=./imgs masks=./masks category="bond wire" into=/path/to/dataset test_fraction=0.2
+sam3-finetune --data-root /path/to/dataset --sam3-checkpoint sam3.pt --bpe-path bpe_simple_vocab_16e6.txt.gz --epochs 10
+
+# HPC (LSF) examples:
 mgpu_() { bsub -Is -q gpu -gpu "num=3:j_exclusive=yes:gmem=20G" -R 'select[type==X64LIN] rusage[mem=200]' -n 4 "$1"; }
 mgpu_ "python train.py -c configs/config_gpu_q.yaml --num-gpus 3 --num-nodes 1"
 
