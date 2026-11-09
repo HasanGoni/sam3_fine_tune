@@ -21,7 +21,7 @@ from sam3_fine_tune.inference.run import (
 CKPT, BPE = os.environ.get("SAM3_CHECKPOINT"), os.environ.get("SAM3_BPE")
 pytestmark = pytest.mark.skipif(
     not (CKPT and BPE and Path(CKPT).is_file() and Path(BPE).is_file()),
-    reason="set SAM3_CHECKPOINT and SAM3_BPE to run against real weights",
+    reason="set SAM3_CHECKPOINT and SAM3_BPE to run against real weights (local copies: see CLAUDE.md, Local weights)",
 )
 
 

@@ -201,6 +201,12 @@ for 5+ minutes (`TERM_OWNER`, exit `143`) — easy to mistake for a manual
 kill; check for a slow setup phase or high `Data Time` steps before assuming
 a bug.
 
+## Local weights
+
+`~/workspace/projects/Models/models--facebook--sam3/` holds `sam3.pt` and `bpe_simple_vocab_16e6.txt.gz` (the tokenizer is
+not in this repo). Check there before downloading anything. `data/` is gitignored scratch for downloads. Real-weights
+test: `SAM3_CHECKPOINT=<sam3.pt> SAM3_BPE=<bpe.gz> .venv/bin/python -m pytest tests/inference/test_real_weights.py -q`.
+
 ## Formatting / lint / tests
 
 Plain `python` is not on PATH here; use `.venv/bin/python`.
@@ -218,6 +224,7 @@ Do not run `ufmt format` on a whole folder: `.pre-commit-config.yaml` holds the 
 `sam3_fine_tune/inference/`. Vendored `sam3/`, `scripts/` and the nbdev-generated modules are not formatted
 (`workflows/format.yml` at the repo root is outside `.github/` and never runs). Line length is 88.
 
+After implementing, run `/code-review` for correctness bugs; the standards/spec review does not hunt them.
 Review rules that need judgement live in `CODING_STANDARDS.md`; domain vocabulary in `GLOSSARY.md`.
 
 ## Adding a Hydra CLI

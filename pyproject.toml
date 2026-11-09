@@ -142,6 +142,8 @@ formatter = "ruff-api"
 python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
+follow_imports = "silent"
+ignore_missing_imports = true
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
 
