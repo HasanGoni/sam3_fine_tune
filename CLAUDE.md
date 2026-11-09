@@ -108,7 +108,7 @@ earlier.
 ## Building / extending a dataset
 
 `sam3-dataset images=... masks=... category=... into=...` (`sam3_fine_tune/dataset/`, Hydra, console script registered in
-`pyproject.toml`; after pulling this change run `uv pip install -e . --no-deps` or `uv sync` to get the script) converts masks to COCO,
+`pyproject.toml`; `uv pip install -e . --no-deps` or `uv sync` installs the script) converts masks to COCO,
 splits train/test and creates / extends a category locally. See README "Shortcut: build or extend a dataset".
 
 ## Training config gotchas
@@ -201,22 +201,29 @@ for 5+ minutes (`TERM_OWNER`, exit `143`) — easy to mistake for a manual
 kill; check for a slow setup phase or high `Data Time` steps before assuming
 a bug.
 
-## Formatting / lint
+## Formatting / lint / tests
 
-CI (`workflows/format.yml`) checks `ufmt` (black + usort via `ruff-api`) over
-`sam3` and `scripts`:
+Plain `python` is not on PATH here; use `.venv/bin/python`.
 
 ```bash
-pip install ruff-api==0.1.0
-ufmt check sam3 scripts   # or: ufmt format sam3 scripts
+.venv/bin/python -m pytest tests                      # full suite (~35 s, CPU only)
+.venv/bin/python -m pytest tests/test_repo_standards.py   # mechanical repo rules, instant
+uvx --python 3.12 --with ruff-api==0.1.0 --with black==24.2.0 --with usort==1.0.2 ufmt format <paths>
 ```
 
-`black` line length is 88 (`pyproject.toml`).
+`.github/workflows/standards.yml` and `.pre-commit-config.yaml` (`uvx pre-commit install`, once) run the repo rules and
+`ufmt` on the hand-written code: `tests/`, `sam3_fine_tune/{dataset,finetune,sambaunet}` and the `sam3-infer` files in
+`sam3_fine_tune/inference/`. Vendored `sam3/`, `scripts/` and the nbdev-generated modules are not formatted
+(`workflows/format.yml` at the repo root is outside `.github/` and never runs). Line length is 88.
 
-## Tests
+Review rules that need judgement live in `CODING_STANDARDS.md`; domain vocabulary in `GLOSSARY.md`.
 
-`pytest` is configured (`testpaths = ["tests"]` in `pyproject.toml`) but no
-`tests/` directory exists yet in this repo.
+## Adding a Hydra CLI
+
+Copy the layout of `sam3_fine_tune/dataset/`: `cli.py` (`@hydra.main(config_path="conf", ...)`), `__main__.py`,
+`conf/<name>.yaml` **plus an empty `conf/__init__.py`**, a `[project.scripts]` entry and a
+`[tool.setuptools.package-data]` entry in `pyproject.toml`, and a `tests/<name>/` folder. `tests/test_repo_standards.py`
+fails if the `__init__.py` or package-data entry is missing.
 
 ## Data layout convention
 

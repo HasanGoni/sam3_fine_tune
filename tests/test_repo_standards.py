@@ -1,0 +1,50 @@
+"""Mechanical repo rules (see CODING_STANDARDS.md): cheap, stdlib-only, run in CI and by pre-commit."""
+
+from pathlib import Path
+
+REPO = Path(__file__).parents[1]
+SCANNED = ("sam3_fine_tune", "scripts", "tests")
+# Vendored upstream code that pickles arbitrary Python objects between ranks.
+UNSAFE_LOAD_ALLOWED_FILES = {"sam3/train/utils/distributed.py"}
+UNSAFE_LOAD_MARKER = "unsafe-load-ok"
+
+
+def _py_files(roots):
+    for root in roots:
+        yield from (REPO / root).rglob("*.py")
+
+
+def test_torch_load_never_disables_weights_only_without_a_reason():
+    """`weights_only=False` unpickles arbitrary code; justify it with `# unsafe-load-ok: <why>` on the same line."""
+    offenders = []
+    for path in _py_files(SCANNED + ("sam3",)):
+        rel = path.relative_to(REPO).as_posix()
+        if rel in UNSAFE_LOAD_ALLOWED_FILES or rel == "tests/test_repo_standards.py":
+            continue
+        for n, line in enumerate(path.read_text().splitlines(), 1):
+            if "weights_only=False" in line and UNSAFE_LOAD_MARKER not in line:
+                offenders.append(f"{rel}:{n}")
+    assert not offenders, f"torch.load(weights_only=False) without '# {UNSAFE_LOAD_MARKER}: <reason>': {offenders}"
+
+
+def test_every_hydra_conf_folder_is_a_python_package():
+    """Hydra resolves `config_path="conf"` as a package; without __init__.py it fails with 'config module not found'."""
+    missing = [
+        p.relative_to(REPO).as_posix()
+        for p in (REPO / "sam3_fine_tune").rglob("conf")
+        if p.is_dir() and "__pycache__" not in p.parts and not (p / "__init__.py").exists()
+    ]
+    assert not missing, f"add an empty __init__.py to: {missing}"
+
+
+def test_every_conf_folder_is_listed_as_package_data():
+    import tomllib
+
+    package_data = tomllib.loads((REPO / "pyproject.toml").read_text())["tool"]["setuptools"]["package-data"]
+    conf_packages = {
+        ".".join(p.relative_to(REPO).parts[:-1])
+        for p in (REPO / "sam3_fine_tune").rglob("conf")
+        if p.is_dir() and any(p.glob("*.yaml"))
+    }
+    missing = sorted(conf_packages - set(package_data))
+    assert not missing, f"add [tool.setuptools.package-data] entries (conf/*.yaml) for: {missing}"

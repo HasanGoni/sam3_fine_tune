@@ -1,0 +1,18 @@
+name: Standards
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  standards:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pytest ruff-api==0.1.0 ufmt==2.9.1 black==24.2.0 usort==1.0.2
+      - name: Mechanical repo rules
+        run: pytest tests/test_repo_standards.py -q
+      - name: Formatting (hand-written packages)
+        run: ufmt check tests sam3_fine_tune/dataset sam3_fine_tune/finetune sam3_fine_tune/sambaunet sam3_fine_tune/inference/cli.py sam3_fine_tune/inference/run.py sam3_fine_tune/inference/__main__.py
