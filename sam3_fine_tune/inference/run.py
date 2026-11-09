@@ -6,6 +6,7 @@ arrays, one per detected instance) so the output logic is testable without weigh
 from __future__ import annotations
 
 import json
+from collections import Counter
 from pathlib import Path
 from typing import Callable, Sequence
 
@@ -33,8 +34,7 @@ def list_images(folder) -> list[Path]:
     found = sorted(p for p in folder.iterdir() if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS)
     if not found:
         raise ValueError(f"no images ({', '.join(sorted(IMAGE_EXTENSIONS))}) in {folder}")
-    stems = [p.stem for p in found]
-    dup = sorted({s for s in stems if stems.count(s) > 1})
+    dup = sorted(s for s, n in Counter(p.stem for p in found).items() if n > 1)
     if dup:
         raise ValueError(f"images share a file stem and would overwrite each other's outputs: {dup}")
     return found
@@ -86,25 +86,34 @@ def run_inference(image_paths: Sequence[Path], prompt: str, out, predict: Predic
 
 
 def make_predictor(sam3_checkpoint, bpe_path, device: str, threshold: float, checkpoint=None) -> Predict:
-    """Base SAM3 from ``sam3_checkpoint``; if ``checkpoint`` is given its ``["model"]`` weights replace them."""
+    """Base SAM3 from ``sam3_checkpoint``, or the full fine-tuned weights from ``checkpoint`` when given."""
     import torch
 
     from sam3 import build_sam3_image_model
     from sam3.model.sam3_image_processor import Sam3Processor
 
-    model = build_sam3_image_model(bpe_path=str(bpe_path), device=device, eval_mode=True,
-                                   checkpoint_path=str(sam3_checkpoint), load_from_HF=False)
+    # a fine-tuned checkpoint holds every weight, so the base file is only read when no checkpoint is given
+    model = build_sam3_image_model(bpe_path=str(bpe_path), device=device, eval_mode=True, load_from_HF=False,
+                                   checkpoint_path=None if checkpoint is not None else str(sam3_checkpoint))
     if checkpoint is not None:
-        weights = torch.load(checkpoint, map_location="cpu", weights_only=True)
-        model.load_state_dict(weights["model"])
-        model.eval()
+        try:
+            weights = torch.load(checkpoint, map_location="cpu", weights_only=True)
+            state = weights["model"]
+            model.load_state_dict(state)
+        except Exception as e:  # unpickling, missing "model" key, or key/shape mismatch
+            raise ValueError(f"checkpoint {checkpoint} is not a compatible fine-tuned SAM3 checkpoint: "
+                             f"{type(e).__name__}: {str(e)[:300]}") from None
+    model.eval()
     processor = Sam3Processor(model, device=device, confidence_threshold=threshold)
 
     @torch.no_grad()
     def predict(image_path: Path, prompt: str):
         state = processor.set_image(Image.open(image_path).convert("RGB"))
         state = processor.set_text_prompt(state=state, prompt=prompt)
-        masks = [(m.cpu().numpy() if hasattr(m, "cpu") else np.asarray(m)).squeeze() > 0.5 for m in state.get("masks", [])]
+        masks = []
+        for m in state.get("masks", []):  # (N, 1, H, W) bool -> N x (H, W)
+            m = m.cpu().numpy() if hasattr(m, "cpu") else np.asarray(m)
+            masks.append(m[0].astype(bool) if m.ndim == 3 else m.astype(bool))
         scores = [float(s) for s in state.get("scores", [])]
         return masks, scores
 

@@ -9,7 +9,7 @@ defaults:
 images: ???              # folder of images (png/jpg/jpeg/tif/tiff/bmp/webp), not searched recursively
 prompt: ???              # text prompt, e.g. the category_name used in training
 out: ???                 # output folder: masks/, overlays/, summary.json (created; reruns overwrite)
-sam3_checkpoint: ???     # base sam3.pt (needed for base AND fine-tuned runs)
+sam3_checkpoint: ???     # base sam3.pt (required by the config for base and fine-tuned runs; read only for base)
 bpe_path: ???            # bpe_simple_vocab_16e6.txt.gz
 checkpoint: null         # fine-tuned checkpoint; null -> base SAM3 weights
 threshold: 0.5           # confidence threshold for keeping an instance
