@@ -1,4 +1,4 @@
-# Run base or fine-tuned SAM3 with ONE text prompt on a folder of images. Override anything from the CLI:
+# Run base or fine-tuned SAM3 with one or several text prompts on a folder of images. Override anything from the CLI:
 #   sam3-infer images=./imgs prompt="bond wire" out=./pred sam3_checkpoint=sam3.pt bpe_path=bpe_simple_vocab_16e6.txt.gz
 #   sam3-infer ... checkpoint=experiments/run1/checkpoints/checkpoint.pt     # fine-tuned model instead of base
 defaults:
@@ -7,12 +7,16 @@ defaults:
   - override hydra/hydra_logging: none
 
 images: ???              # folder of images (png/jpg/jpeg/tif/tiff/bmp/webp), not searched recursively
-prompt: ???              # text prompt, e.g. the category_name used in training
+prompt: null             # ONE text prompt, e.g. the category_name used in training (or use prompts below)
+prompts: null            # several prompts, each with its own optional threshold; the prompt-entry shape is the
+                         # extension point for other prompt kinds (only type: text exists today):
+                         #   prompts='[{text: "bond wire", threshold: 0.4}, {text: pin}, {type: text, text: crack, threshold: 0.7}]'
+                         # entries without threshold use `threshold` below; each prompt gets its own masks/<slug>/ folder
 out: ???                 # output folder: masks/, overlays/, summary.json (created; reruns overwrite)
 sam3_checkpoint: ???     # base sam3.pt (required by the config for base and fine-tuned runs; read only for base)
 bpe_path: ???            # bpe_simple_vocab_16e6.txt.gz
 checkpoint: null         # fine-tuned checkpoint; null -> base SAM3 weights
-threshold: 0.5           # confidence threshold for keeping an instance
+threshold: 0.5           # default confidence threshold in (0, 1] for prompts that do not set their own
 device: auto             # auto | cpu | cuda
 
 hydra:

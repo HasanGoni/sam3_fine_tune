@@ -1,19 +1,21 @@
-"""Hydra CLI:  sam3-infer images=... prompt=... out=... sam3_checkpoint=... bpe_path=... [checkpoint=...]  (see conf/infer.yaml)"""
+"""Hydra CLI:  sam3-infer images=... prompt=...|prompts=[...] out=... sam3_checkpoint=... bpe_path=... [checkpoint=...]  (see conf/infer.yaml)"""
 
 from __future__ import annotations
 
 import hydra
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 
 from .run import make_predictor, resolve_device, run_inference, validate_inputs
 
 
 def run(cfg: DictConfig, predict=None) -> dict:
-    """Validate, then run. ``predict`` is injectable; without it the real SAM3 is loaded."""
+    """Validate, then run. ``predict`` (a ``Predictor``) is injectable; without it the real SAM3 is loaded."""
     try:
-        paths = validate_inputs(
+        prompts = cfg.get("prompts")
+        paths, specs = validate_inputs(
             images=cfg.images,
-            prompt=cfg.prompt,
+            prompt=cfg.get("prompt"),
+            prompts=None if prompts is None else OmegaConf.to_container(prompts),
             sam3_checkpoint=cfg.sam3_checkpoint,
             bpe_path=cfg.bpe_path,
             checkpoint=cfg.checkpoint,
@@ -24,7 +26,7 @@ def run(cfg: DictConfig, predict=None) -> dict:
 
             device = resolve_device(cfg.device, torch.cuda.is_available())
             predict = make_predictor(
-                cfg.sam3_checkpoint, cfg.bpe_path, device, cfg.threshold, cfg.checkpoint
+                cfg.sam3_checkpoint, cfg.bpe_path, device, cfg.checkpoint
             )
         else:
             device = cfg.device
@@ -34,17 +36,18 @@ def run(cfg: DictConfig, predict=None) -> dict:
         "model": "fine-tuned" if cfg.checkpoint else "base",
         "checkpoint": cfg.checkpoint and str(cfg.checkpoint),
         "sam3_checkpoint": str(cfg.sam3_checkpoint),
-        "threshold": cfg.threshold,
+        "default_threshold": cfg.threshold,
         "device": device,
     }
-    return run_inference(paths, cfg.prompt, cfg.out, predict, meta)
+    return run_inference(paths, specs, cfg.out, predict, meta)
 
 
 @hydra.main(config_path="conf", config_name="infer", version_base="1.3")
 def main(cfg: DictConfig) -> None:
     summary = run(cfg)
+    texts = [p["text"] for p in summary["prompts"]]
     print(
-        f"{summary['model']} model, prompt {summary['prompt']!r}: {summary['num_images']} image(s) -> {cfg.out}"
+        f"{summary['model']} model, prompt(s) {texts}: {summary['num_images']} image(s) -> {cfg.out}"
     )
 
 

@@ -58,7 +58,7 @@ sam3-finetune --data-root /path/to/dataset \
 |---|---|---|
 | `sam3-dataset` | `python -m sam3_fine_tune.dataset` | Hydra CLI: images + masks → COCO, train/test split, create or extend a category |
 | `sam3-finetune` | `python -m sam3_fine_tune.finetune` | train SAM3, then evaluate the best checkpoint on `test/` |
-| `sam3-infer` | `python -m sam3_fine_tune.inference` | base or fine-tuned SAM3 with one text prompt on a folder of images |
+| `sam3-infer` | `python -m sam3_fine_tune.inference` | base or fine-tuned SAM3 with one or several text prompts (each with its own threshold) on a folder of images |
 | – | `python -m sam3_fine_tune.sambaunet.train` / `.evaluate` | Hydra CLIs for the SAMBA-UNet baseline |
 
 ---
@@ -151,7 +151,7 @@ python train.py -c configs/my_config.yaml --num-gpus 1 --num-nodes 1
 
 ## Inference and further evaluation
 
-### Segment a folder with one text prompt (`sam3-infer`)
+### Segment a folder with text prompts (`sam3-infer`)
 
 ```bash
 # base SAM3
@@ -165,6 +165,20 @@ Writes `out/masks/<name>.png` (0/255, union of all instances), `out/overlays/<na
 (per image: instances, foreground pixels, scores; plus prompt, threshold, device, checkpoint). A rerun overwrites the
 same files. Options: `threshold=0.5`, `device=auto|cpu|cuda` (defaults in `sam3_fine_tune/inference/conf/infer.yaml`).
 Also runs as `python -m sam3_fine_tune.inference`.
+
+**Several prompts**, each with its own confidence threshold (entries without one use `threshold`):
+
+```bash
+sam3-infer images=./imgs out=./pred sam3_checkpoint=... bpe_path=... threshold=0.5 \
+  'prompts=[{text: "bond wire", threshold: 0.4}, {text: pin}, {type: text, text: crack, threshold: 0.7}]'
+```
+
+The image backbone runs once per image and is reused for every prompt. With several prompts the masks go to
+`out/masks/<prompt>/<name>.png`, the overlay shows one colour per prompt, and `summary.json` has a per-prompt entry
+(instances, foreground pixels, scores, threshold used) under each image. Invalid config (empty list, duplicate texts,
+threshold outside (0, 1]) fails before the model loads, naming the entry. Each entry is `{type, text, threshold}`;
+`type: text` is the only kind today and the entry shape is the extension point for other prompt kinds (`PROMPT_TYPES`
+in `sam3_fine_tune/inference/run.py`). A single `prompt="..."` still works; set one of `prompt` / `prompts`, not both.
 
 ### Notebooks
 
