@@ -6,7 +6,7 @@ defaults:
   - override hydra/job_logging: none
   - override hydra/hydra_logging: none
 
-images: ???              # folder of images (png/jpg/jpeg/tif/tiff/bmp/webp), not searched recursively
+images: null             # folder of images (png/jpg/jpeg/tif/tiff/bmp/webp), not searched recursively (or use coco_split)
 prompt: null             # ONE text prompt, e.g. the category_name used in training (or use prompts below)
 prompts: null            # several prompts, each with its own optional threshold; the prompt-entry shape is the
                          # extension point for other prompt kinds (only type: text exists today):
@@ -17,7 +17,11 @@ prompts: null            # several prompts, each with its own optional threshold
 out: ???                 # output folder: masks/, overlays/, summary.json (created; reruns overwrite)
 sam3_checkpoint: ???     # base sam3.pt (required by the config for base and fine-tuned runs; read only for base)
 bpe_path: ???            # bpe_simple_vocab_16e6.txt.gz
-checkpoint: null         # fine-tuned checkpoint; null -> base SAM3 weights
+checkpoint: null         # fine-tuned checkpoint; null -> base SAM3 weights. A list compares models on the same images
+                         # (null = base): checkpoint='[null, exp/run1/checkpoints/checkpoint.pt]' -> out/<model>/ each
+coco_split: null         # COCO split folder (images/ + annotation file), e.g. dataset/test: segment its images and score
+                         # them (prompt text must equal a category_name); replaces images=
+coco_ann: annotation.json  # annotation file in coco_split ('annotation_merged.json' matches `sam3-finetune --eval-only`)
 threshold: 0.5           # default confidence threshold in (0, 1] for prompts that do not set their own
 device: auto             # auto | cpu | cuda
 

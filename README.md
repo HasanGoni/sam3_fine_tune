@@ -193,6 +193,27 @@ threshold outside (0, 1]) fails before the model loads, naming the entry. Each e
 `type: text` is the only kind today and the entry shape is the extension point for other prompt kinds (`PROMPT_TYPES`
 in `sam3_fine_tune/inference/run.py`). A single `prompt="..."` still works; set one of `prompt` / `prompts`, not both.
 
+**Score against a COCO split and compare models:**
+
+```bash
+# score one model on dataset/test (the prompt text must equal a category_name)
+sam3-infer coco_split=dataset/test coco_ann=annotation_merged.json out=./pred \
+  sam3_checkpoint=... bpe_path=... checkpoint=experiments/run1/checkpoints/checkpoint.pt \
+  'prompts=[{text: "bond wire"}, {text: pin}]'
+# base vs fine-tuned(s) on the same images: null is the base model
+sam3-infer coco_split=dataset/test ... 'checkpoint=[null, experiments/run1/checkpoints/checkpoint.pt]'
+```
+
+`coco_split` replaces `images`: the split's images are segmented and scored against the rasterised COCO masks. Scores are
+written to `out/multiclass_foreground_iou_summary.json` in the same layout as `sam3-finetune` and the SAMBA-UNet
+evaluation (they share the scoring code), so the numbers match `sam3-finetune --eval-only` for the same checkpoint,
+threshold and images; use `coco_ann=annotation_merged.json` to match its annotation file. With a checkpoint list, each model
+writes to `out/<model>/` (`base`, or `<experiment>_<checkpoint name>`) with its own summary, and a side-by-side table of
+foreground IoU / precision / recall (%) per category is printed. Prompts without a matching category, and categories
+without a prompt, are reported on stderr and under `coco` in `summary.json` (and in the score file's `meta`); only
+matching pairs are scored, and no match at all is an error before the model loads. Scoring needs one threshold per
+prompt (no sweeps).
+
 ### Notebooks
 
 Further inference and evaluation steps in `nbs/`:

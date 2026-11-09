@@ -42,14 +42,32 @@ def evaluate_coco(
         )
         times.append(time.perf_counter() - t0)
         scores.update(pred, gt, ds.image_path(i).name)
+    return write_result(
+        scores,
+        num_images=n,
+        latency=float(np.median(times)) if times else None,
+        meta=meta,
+        out_dir=out_dir,
+    )
+
+
+def write_result(
+    scores: CategoryScores,
+    *,
+    num_images: int,
+    latency: float | None,
+    meta: dict | None,
+    out_dir,
+) -> dict:
+    """Build and write ``multiclass_foreground_iou_summary.json`` (shared by ``sam3-finetune`` and ``sam3-infer``)."""
     result = {
         "summary": scores.summary(),
         "per_category_details": scores.details(),
         "meta": {
             "model": "sam3",
-            "num_images": n,
-            "categories": ds.category_names,
-            "latency_s_per_image": round(float(np.median(times)), 3) if times else None,
+            "num_images": num_images,
+            "categories": scores.names,
+            "latency_s_per_image": None if latency is None else round(latency, 3),
             **(meta or {}),
         },
     }

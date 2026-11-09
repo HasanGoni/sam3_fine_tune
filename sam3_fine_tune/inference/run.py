@@ -176,17 +176,49 @@ def _check_threshold(value: Any, label: str) -> float:
     return number
 
 
+def normalize_checkpoints(checkpoint: Any) -> "list[Path | None]":
+    """``checkpoint`` may be null (base model), a path, or a list of those where null means the base model."""
+    items = list(checkpoint) if isinstance(checkpoint, (list, tuple)) else [checkpoint]
+    if not items:
+        raise ValueError(
+            "checkpoint list must not be empty (use null for the base model)"
+        )
+    out: list[Path | None] = [None if c is None else Path(str(c)) for c in items]
+    for c in out:
+        if c is not None and not c.is_file():
+            raise ValueError(f"checkpoint (fine-tuned model) not found: {c}")
+    labels = [model_label(c) for c in out]
+    dup = sorted(label for label, n in Counter(labels).items() if n > 1)
+    if dup:
+        raise ValueError(
+            f"checkpoints would share an output name {dup}: list each model once"
+        )
+    return out
+
+
+def model_label(checkpoint: Path | None) -> str:
+    """Folder/table name of a model: ``base``, or ``<experiment>_<stem>`` for ``<experiment>/checkpoints/<stem>.pt``."""
+    if checkpoint is None:
+        return "base"
+    if checkpoint.parent.name == "checkpoints" and checkpoint.parent.parent.name:
+        return f"{checkpoint.parent.parent.name}_{checkpoint.stem}"
+    return checkpoint.stem
+
+
 def validate_inputs(
     *,
-    images: str | Path,
+    images: str | Path | None,
     prompt: str | None = None,
     prompts: Sequence[Any] | None = None,
     sam3_checkpoint: str | Path,
     bpe_path: str | Path,
-    checkpoint: str | Path | None,
+    checkpoint: Any,
     threshold: float,
 ) -> "tuple[list[Path], list[PromptSpec]]":
-    """Fail early (before any model is loaded) with a message that says what to fix. Returns (images, prompt specs)."""
+    """Fail early (before any model is loaded) with a message that says what to fix. Returns (images, prompt specs).
+
+    ``images=None`` skips the folder check (images then come from a COCO split) and returns an empty list.
+    """
     specs = parse_prompts(prompt, prompts, threshold)
     for label, path in (
         ("sam3_checkpoint (base sam3.pt)", sam3_checkpoint),
@@ -194,9 +226,8 @@ def validate_inputs(
     ):
         if not Path(path).is_file():
             raise ValueError(f"{label} not found: {path}")
-    if checkpoint is not None and not Path(checkpoint).is_file():
-        raise ValueError(f"checkpoint (fine-tuned model) not found: {checkpoint}")
-    return list_images(images), specs
+    normalize_checkpoints(checkpoint)
+    return ([] if images is None else list_images(images)), specs
 
 
 def overlay_mask(
@@ -236,6 +267,7 @@ def run_inference(
     out: str | Path,
     predictor: Predictor,
     meta: dict[str, Any] | None = None,
+    on_union: Callable[[Path, PromptSpec, np.ndarray], None] | None = None,
 ) -> dict[str, Any]:
     """Write per-prompt masks, overlays and ``out/summary.json``.
 
@@ -243,7 +275,8 @@ def run_inference(
     several. A prompt with several thresholds (a sweep) gets one extra ``thr_<t>/`` level per threshold, in masks and in
     ``overlays/[<slug>/]thr_<t>/<stem>.png``; ``overlays/<stem>.png`` shows every prompt at its lowest threshold.
     The model runs once per image and prompt, at the lowest threshold; higher ones re-filter by score (``> t``, as the
-    processor does).
+    processor does). ``on_union(image, prompt, mask)`` receives each prompt's combined mask at its (single) threshold,
+    e.g. for scoring.
     """
     out = Path(out)
     multi = len(specs) > 1
@@ -294,9 +327,10 @@ def run_inference(
                         sub("overlays", spec, t) / f"{path.stem}.png"
                     )
                 levels.append({"threshold": t, **_stats(m_t, s_t, union)})
-            overlay = overlay_mask(
-                overlay, unions[0], color
-            )  # thresholds ascend: [0] is the lowest
+            if on_union is not None and not spec.sweep:
+                on_union(path, spec, unions[0])
+            # thresholds ascend: unions[0] is the lowest
+            overlay = overlay_mask(overlay, unions[0], color)
             entry: dict[str, Any] = {"prompt": spec.text}
             if spec.sweep:
                 entry["sweep"] = levels
