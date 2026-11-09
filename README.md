@@ -476,6 +476,9 @@ python -m sam3_fine_tune.finetune \
     --epochs 10 --train-batch-size 2 --grad-accum 2 --category-chunk-size 9
 ```
 
+The same command is installed as a console script (`sam3-finetune ...`; run `uv pip install -e . --no-deps` or `uv sync`
+once to create it).
+
 **What happens, in order**
 
 1. The dataset layout is checked, and `annotation_merged.json` is created as a copy of `annotation.json` in `train/` and

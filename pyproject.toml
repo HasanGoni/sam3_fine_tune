@@ -104,6 +104,7 @@ sambaunet = [
 
 [project.scripts]
 sam3-dataset = "sam3_fine_tune.dataset.cli:main"
+sam3-finetune = "sam3_fine_tune.finetune.cli:main"
 
 [project.urls]
 "Homepage" = "https://github.com/facebookresearch/sam3"

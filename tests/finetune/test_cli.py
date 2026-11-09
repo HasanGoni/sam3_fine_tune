@@ -61,3 +61,9 @@ def test_bad_dataset_fails_before_training(fake, tmp_path):
     with pytest.raises(FileNotFoundError):
         cli.main(args)
     assert "train" not in calls
+
+
+def test_console_script_is_registered_in_pyproject():
+    import tomllib
+    scripts = tomllib.loads((Path(cli.__file__).parents[2] / "pyproject.toml").read_text())["project"]["scripts"]
+    assert scripts["sam3-finetune"] == "sam3_fine_tune.finetune.cli:main"
