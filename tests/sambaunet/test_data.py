@@ -15,10 +15,14 @@ def test_item_shapes_and_category_order(coco_root):
 
 
 def test_masks_land_in_the_right_channel(coco_root):
-    ds = CocoSemanticDataset(coco_root / "train", size=120)  # im0 is 120x80 -> stretched to 120x120
+    ds = CocoSemanticDataset(
+        coco_root / "train", size=120
+    )  # im0 is 120x80 -> stretched to 120x120
     m = ds[0]["mask"]
     pin, wire = m[0], m[1]
-    assert wire[:, :60].sum() > 0 and pin[:, :60].sum() == 0  # wire x in [10,50], pin x in [60,80]
+    assert (
+        wire[:, :60].sum() > 0 and pin[:, :60].sum() == 0
+    )  # wire x in [10,50], pin x in [60,80]
     assert pin[:, 60:].sum() > 0
 
 
@@ -35,13 +39,16 @@ def test_original_mask_is_full_resolution(coco_root):
 
 
 def test_explicit_category_list_keeps_train_order_on_test(coco_root):
-    ds = CocoSemanticDataset(coco_root / "test", size=64, category_names=["bond wire", "pin"])
+    ds = CocoSemanticDataset(
+        coco_root / "test", size=64, category_names=["bond wire", "pin"]
+    )
     assert ds.category_names == ["bond wire", "pin"]
     assert ds[0]["mask"][0].sum() > 0  # channel 0 is now the wire
 
 
 def test_unknown_category_name_raises(coco_root):
     import pytest
+
     with pytest.raises(KeyError):
         CocoSemanticDataset(coco_root / "test", size=64, category_names=["crack"])
 

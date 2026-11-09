@@ -1,4 +1,5 @@
 """Device handling must work on machines without a GPU. Run with CUDA_VISIBLE_DEVICES="" to prove it for real."""
+
 import types
 
 import pytest
@@ -24,7 +25,9 @@ def test_resolve_accelerator_auto_follows_availability(monkeypatch):
 
 def test_resolve_accelerator_keeps_explicit_choices(monkeypatch):
     _with_cuda(monkeypatch)
-    assert resolve_accelerator("cpu") == "cpu"  # cpu on a GPU machine is allowed (debugging)
+    assert (
+        resolve_accelerator("cpu") == "cpu"
+    )  # cpu on a GPU machine is allowed (debugging)
     assert resolve_accelerator("cuda") == "cuda"
 
 
@@ -56,7 +59,9 @@ def test_nccl_backend_falls_back_to_gloo_on_cpu():
 def test_mem_meter_does_not_touch_cuda_on_cpu(monkeypatch):
     _no_cuda(monkeypatch)
     m = MemMeter("Mem (GB)", torch.device("cpu"), ":.2f")
-    m.update(reset_peak_usage=True)  # used to raise: torch.cuda.max_memory_allocated needs a GPU
+    m.update(
+        reset_peak_usage=True
+    )  # used to raise: torch.cuda.max_memory_allocated needs a GPU
     assert m.val == 0 and m.peak == 0
     assert "Mem (GB)" in str(m)
 
@@ -79,17 +84,35 @@ def test_dummy_loss_default_device_works_without_gpu(monkeypatch):
     assert next(iter(out.values())).device.type == "cpu"
 
 
-@pytest.mark.parametrize("reduce,multimask", [(True, False), (True, True), (False, False)])
+@pytest.mark.parametrize(
+    "reduce,multimask", [(True, False), (True, True), (False, False)]
+)
 def test_sigmoid_focal_loss_runs_on_cpu_and_matches_the_formula(reduce, multimask):
     from sam3.train.loss.loss_fns import sigmoid_focal_loss
 
     torch.manual_seed(0)
     shape = (2, 3, 4, 5) if multimask else (4, 6)
-    x, y = torch.randn(*shape), (torch.rand(*shape) > 0.5).float()  # CPU tensors: used to hit the Triton kernel
-    got = sigmoid_focal_loss(x, y, num_boxes=2, alpha=0.25, gamma=2, loss_on_multimask=multimask, reduce=reduce)
-    p = x.sigmoid(); pt = p * y + (1 - p) * (1 - y)
+    x, y = (
+        torch.randn(*shape),
+        (torch.rand(*shape) > 0.5).float(),
+    )  # CPU tensors: used to hit the Triton kernel
+    got = sigmoid_focal_loss(
+        x,
+        y,
+        num_boxes=2,
+        alpha=0.25,
+        gamma=2,
+        loss_on_multimask=multimask,
+        reduce=reduce,
+    )
+    p = x.sigmoid()
+    pt = p * y + (1 - p) * (1 - y)
     ref = 0.25 * y + 0.75 * (1 - y)
-    ref = ref * torch.nn.functional.binary_cross_entropy_with_logits(x, y, reduction="none") * (1 - pt) ** 2
+    ref = (
+        ref
+        * torch.nn.functional.binary_cross_entropy_with_logits(x, y, reduction="none")
+        * (1 - pt) ** 2
+    )
     assert torch.isfinite(got).all()
     if not reduce:
         torch.testing.assert_close(got, ref)

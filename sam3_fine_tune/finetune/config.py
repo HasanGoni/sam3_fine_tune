@@ -3,6 +3,7 @@
 ``sam3/train/train.py`` has no ``key=value`` overrides, so the CLI patches a copy of the YAML instead. The base config
 keeps its interpolations (``${paths.pin_dir_root}`` ...), so changing ``paths.*`` is enough for most settings.
 """
+
 from __future__ import annotations
 
 import shutil
@@ -22,9 +23,21 @@ def _set(cfg: DictConfig, key: str, value) -> None:
         OmegaConf.update(cfg, key, value, merge=False)
 
 
-def build_train_config(base: Path, *, data_root, experiment_dir, sam3_checkpoint, bpe_path, epochs=None,
-                       train_batch_size=None, val_batch_size=None, category_chunk_size=None, grad_accum=None,
-                       accelerator=None, num_gpus=None) -> DictConfig:
+def build_train_config(
+    base: Path,
+    *,
+    data_root,
+    experiment_dir,
+    sam3_checkpoint,
+    bpe_path,
+    epochs=None,
+    train_batch_size=None,
+    val_batch_size=None,
+    category_chunk_size=None,
+    grad_accum=None,
+    accelerator=None,
+    num_gpus=None,
+) -> DictConfig:
     """Load ``base`` (interpolations preserved) and apply the overrides; ``None`` keeps the base value."""
     cfg = OmegaConf.load(base)
     exp = str(experiment_dir)
@@ -39,9 +52,18 @@ def build_train_config(base: Path, *, data_root, experiment_dir, sam3_checkpoint
     _set(cfg, "scratch.train_batch_size", train_batch_size)
     _set(cfg, "scratch.val_batch_size", val_batch_size)
     _set(cfg, "scratch.gradient_accumulation_steps", grad_accum)
-    for split in ("train", "val"):  # a GPU-memory lever, see CLAUDE.md "Training config gotchas"
-        _set(cfg, f"trainer.data.{split}.dataset.coco_json_loader.category_chunk_size", category_chunk_size)
-    if epochs is not None:  # the trainer validates every val_epoch_freq epochs (+ once at the end if it does not divide)
+    for split in (
+        "train",
+        "val",
+    ):  # a GPU-memory lever, see CLAUDE.md "Training config gotchas"
+        _set(
+            cfg,
+            f"trainer.data.{split}.dataset.coco_json_loader.category_chunk_size",
+            category_chunk_size,
+        )
+    if (
+        epochs is not None
+    ):  # the trainer validates every val_epoch_freq epochs (+ once at the end if it does not divide)
         cfg.trainer.val_epoch_freq = min(int(cfg.trainer.val_epoch_freq), int(epochs))
     return cfg
 
@@ -49,9 +71,16 @@ def build_train_config(base: Path, *, data_root, experiment_dir, sam3_checkpoint
 def validate_dataset(root) -> None:
     """Fail early, before any GPU time is spent, if the dataset is not in the standard layout."""
     root = Path(root)
-    for rel in ("train/images", "test/images", "train/annotation.json", "test/annotation.json"):
+    for rel in (
+        "train/images",
+        "test/images",
+        "train/annotation.json",
+        "test/annotation.json",
+    ):
         if not (root / rel).exists():
-            raise FileNotFoundError(f"dataset layout is <root>/{{train,test}}/{{images,annotation.json}}: missing {root / rel}")
+            raise FileNotFoundError(
+                f"dataset layout is <root>/{{train,test}}/{{images,annotation.json}}: missing {root / rel}"
+            )
 
 
 def ensure_merged_annotations(root) -> None:

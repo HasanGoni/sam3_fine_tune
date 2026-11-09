@@ -41,7 +41,7 @@ class DINOv3Embedder:
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.model = timm.create_model(model_name, pretrained=False, num_classes=0)
 
-        ckpt = torch.load(str(checkpoint_path), map_location="cpu", weights_only=False)
+        ckpt = torch.load(str(checkpoint_path), map_location="cpu", weights_only=False)  # unsafe-load-ok: external DINOv3 weights, unverified as tensor-only
         filtered = checkpoint_filter_fn(ckpt, self.model)
         missing, unexpected = self.model.load_state_dict(filtered, strict=False)
         if missing:

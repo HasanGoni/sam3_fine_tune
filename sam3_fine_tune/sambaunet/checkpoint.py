@@ -3,6 +3,7 @@
 Only parameters with ``requires_grad`` are stored (the frozen SAM ViT-B is re-downloaded from the Hub on load, like the
 SAM3 flow re-loads its base checkpoint), which keeps checkpoints ~4x smaller.
 """
+
 from __future__ import annotations
 
 import json
@@ -32,13 +33,25 @@ def trainable_state(model: torch.nn.Module) -> dict:
 
 def _plain(obj):
     """Round-trip through JSON so the payload holds only builtin types (numpy scalars would break weights_only=True)."""
-    return json.loads(json.dumps(obj, default=lambda o: o.item() if hasattr(o, "item") else str(o)))
+    return json.loads(
+        json.dumps(obj, default=lambda o: o.item() if hasattr(o, "item") else str(o))
+    )
 
 
-def save_checkpoint(path: Path, model, cfg: DictConfig, category_names: list[str], val=None, **extra) -> None:
+def save_checkpoint(
+    path: Path, model, cfg: DictConfig, category_names: list[str], val=None, **extra
+) -> None:
     """Checkpoints contain only tensors and builtin containers, so they load with ``weights_only=True`` (no pickle code execution)."""
-    torch.save({"model": trainable_state(model), "cfg": OmegaConf.to_container(cfg, resolve=True),
-                "category_names": list(category_names), "val": _plain(val), **extra}, path)
+    torch.save(
+        {
+            "model": trainable_state(model),
+            "cfg": OmegaConf.to_container(cfg, resolve=True),
+            "category_names": list(category_names),
+            "val": _plain(val),
+            **extra,
+        },
+        path,
+    )
 
 
 def load_model(path, device="cpu"):
@@ -48,7 +61,11 @@ def load_model(path, device="cpu"):
     model = build_model(cfg.model, len(ckpt["category_names"]))
     missing, unexpected = model.load_state_dict(ckpt["model"], strict=False)
     frozen = {n for n, p in model.named_parameters() if not p.requires_grad}
-    bad = [k for k in missing if k not in frozen and k not in dict(model.named_buffers())]
+    bad = [
+        k for k in missing if k not in frozen and k not in dict(model.named_buffers())
+    ]
     if bad or unexpected:
-        raise RuntimeError(f"checkpoint/model mismatch: missing={bad[:5]} unexpected={list(unexpected)[:5]}")
+        raise RuntimeError(
+            f"checkpoint/model mismatch: missing={bad[:5]} unexpected={list(unexpected)[:5]}"
+        )
     return model.to(device).eval(), ckpt

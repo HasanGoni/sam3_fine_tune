@@ -3,6 +3,7 @@
 The model call is an injectable ``predict(image_path, prompt) -> (masks, scores)`` (``masks``: list of bool ``(H, W)``
 arrays, one per detected instance) so the output logic is testable without weights; ``make_predictor`` is the real one.
 """
+
 from __future__ import annotations
 
 import json
@@ -23,7 +24,9 @@ def resolve_device(device: str, cuda_available: bool) -> str:
     if device not in DEVICES:
         raise ValueError(f"device must be one of {DEVICES}, got {device!r}")
     if device == "cuda" and not cuda_available:
-        raise ValueError("device=cuda requested but no CUDA GPU is visible; use device=cpu or device=auto")
+        raise ValueError(
+            "device=cuda requested but no CUDA GPU is visible; use device=cpu or device=auto"
+        )
     return ("cuda" if cuda_available else "cpu") if device == "auto" else device
 
 
@@ -31,22 +34,35 @@ def list_images(folder) -> list[Path]:
     folder = Path(folder)
     if not folder.is_dir():
         raise ValueError(f"images folder not found: {folder}")
-    found = sorted(p for p in folder.iterdir() if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS)
+    found = sorted(
+        p
+        for p in folder.iterdir()
+        if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS
+    )
     if not found:
-        raise ValueError(f"no images ({', '.join(sorted(IMAGE_EXTENSIONS))}) in {folder}")
+        raise ValueError(
+            f"no images ({', '.join(sorted(IMAGE_EXTENSIONS))}) in {folder}"
+        )
     dup = sorted(s for s, n in Counter(p.stem for p in found).items() if n > 1)
     if dup:
-        raise ValueError(f"images share a file stem and would overwrite each other's outputs: {dup}")
+        raise ValueError(
+            f"images share a file stem and would overwrite each other's outputs: {dup}"
+        )
     return found
 
 
-def validate_inputs(*, images, prompt, sam3_checkpoint, bpe_path, checkpoint, threshold) -> list[Path]:
+def validate_inputs(
+    *, images, prompt, sam3_checkpoint, bpe_path, checkpoint, threshold
+) -> list[Path]:
     """Fail early (before any model is loaded) with a message that says what to fix. Returns the image list."""
     if not str(prompt).strip():
         raise ValueError("prompt must be a non-empty text prompt")
     if not 0 < float(threshold) <= 1:
         raise ValueError(f"threshold must be in (0, 1], got {threshold}")
-    for label, path in (("sam3_checkpoint (base sam3.pt)", sam3_checkpoint), ("bpe_path (tokenizer vocabulary)", bpe_path)):
+    for label, path in (
+        ("sam3_checkpoint (base sam3.pt)", sam3_checkpoint),
+        ("bpe_path (tokenizer vocabulary)", bpe_path),
+    ):
         if not Path(path).is_file():
             raise ValueError(f"{label} not found: {path}")
     if checkpoint is not None and not Path(checkpoint).is_file():
@@ -54,13 +70,21 @@ def validate_inputs(*, images, prompt, sam3_checkpoint, bpe_path, checkpoint, th
     return list_images(images)
 
 
-def overlay_mask(image: np.ndarray, mask: np.ndarray, color=(255, 0, 0), alpha: float = 0.5) -> np.ndarray:
+def overlay_mask(
+    image: np.ndarray, mask: np.ndarray, color=(255, 0, 0), alpha: float = 0.5
+) -> np.ndarray:
     out = image.astype(np.float32).copy()
     out[mask] = (1 - alpha) * out[mask] + alpha * np.asarray(color, np.float32)
     return out.round().astype(np.uint8)
 
 
-def run_inference(image_paths: Sequence[Path], prompt: str, out, predict: Predict, meta: dict | None = None) -> dict:
+def run_inference(
+    image_paths: Sequence[Path],
+    prompt: str,
+    out,
+    predict: Predict,
+    meta: dict | None = None,
+) -> dict:
     """Write ``out/masks/<stem>.png`` (0/255, union of instances), ``out/overlays/<stem>.png`` and ``out/summary.json``."""
     out = Path(out)
     (out / "masks").mkdir(parents=True, exist_ok=True)
@@ -74,18 +98,37 @@ def run_inference(image_paths: Sequence[Path], prompt: str, out, predict: Predic
         for m in masks:
             m = np.asarray(m).astype(bool)
             if m.shape != union.shape:
-                raise ValueError(f"{path.name}: predicted mask {m.shape} does not match image {union.shape}")
+                raise ValueError(
+                    f"{path.name}: predicted mask {m.shape} does not match image {union.shape}"
+                )
             union |= m
-        Image.fromarray(union.astype(np.uint8) * 255).save(out / "masks" / f"{path.stem}.png")
-        Image.fromarray(overlay_mask(rgb, union)).save(out / "overlays" / f"{path.stem}.png")
-        rows.append({"image": path.name, "instances": len(masks), "foreground_pixels": int(union.sum()),
-                     "scores": [round(float(s), 4) for s in scores]})
-    summary = {**(meta or {}), "prompt": prompt, "num_images": len(rows), "images": rows}
+        Image.fromarray(union.astype(np.uint8) * 255).save(
+            out / "masks" / f"{path.stem}.png"
+        )
+        Image.fromarray(overlay_mask(rgb, union)).save(
+            out / "overlays" / f"{path.stem}.png"
+        )
+        rows.append(
+            {
+                "image": path.name,
+                "instances": len(masks),
+                "foreground_pixels": int(union.sum()),
+                "scores": [round(float(s), 4) for s in scores],
+            }
+        )
+    summary = {
+        **(meta or {}),
+        "prompt": prompt,
+        "num_images": len(rows),
+        "images": rows,
+    }
     (out / SUMMARY_NAME).write_text(json.dumps(summary, indent=2))
     return summary
 
 
-def make_predictor(sam3_checkpoint, bpe_path, device: str, threshold: float, checkpoint=None) -> Predict:
+def make_predictor(
+    sam3_checkpoint, bpe_path, device: str, threshold: float, checkpoint=None
+) -> Predict:
     """Base SAM3 from ``sam3_checkpoint``, or the full fine-tuned weights from ``checkpoint`` when given."""
     import torch
 
@@ -93,16 +136,23 @@ def make_predictor(sam3_checkpoint, bpe_path, device: str, threshold: float, che
     from sam3.model.sam3_image_processor import Sam3Processor
 
     # a fine-tuned checkpoint holds every weight, so the base file is only read when no checkpoint is given
-    model = build_sam3_image_model(bpe_path=str(bpe_path), device=device, eval_mode=True, load_from_HF=False,
-                                   checkpoint_path=None if checkpoint is not None else str(sam3_checkpoint))
+    model = build_sam3_image_model(
+        bpe_path=str(bpe_path),
+        device=device,
+        eval_mode=True,
+        load_from_HF=False,
+        checkpoint_path=None if checkpoint is not None else str(sam3_checkpoint),
+    )
     if checkpoint is not None:
         try:
             weights = torch.load(checkpoint, map_location="cpu", weights_only=True)
             state = weights["model"]
             model.load_state_dict(state)
         except Exception as e:  # unpickling, missing "model" key, or key/shape mismatch
-            raise ValueError(f"checkpoint {checkpoint} is not a compatible fine-tuned SAM3 checkpoint: "
-                             f"{type(e).__name__}: {str(e)[:300]}") from None
+            raise ValueError(
+                f"checkpoint {checkpoint} is not a compatible fine-tuned SAM3 checkpoint: "
+                f"{type(e).__name__}: {str(e)[:300]}"
+            ) from None
     model.eval()
     processor = Sam3Processor(model, device=device, confidence_threshold=threshold)
 
