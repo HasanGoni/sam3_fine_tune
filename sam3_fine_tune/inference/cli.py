@@ -53,14 +53,14 @@ def run(cfg: DictConfig, predictor: PredictorSource | None = None) -> dict[str, 
             threshold=cfg.threshold,
         )
         checkpoints = normalize_checkpoints(_plain(cfg.checkpoint))
-        probe = (
+        scorer = (
             CocoScorer(coco_split, cfg.get("coco_ann", "annotation.json"), specs)
             if coco_split is not None
             else None
         )
-        if probe is not None:
-            paths = probe.image_paths
-            _report_mismatch(probe.mismatch())
+        if scorer is not None:
+            paths = scorer.image_paths
+            _report_mismatch(scorer.mismatch())
         device = cfg.device
         if predictor is None:
             import torch
@@ -81,11 +81,6 @@ def run(cfg: DictConfig, predictor: PredictorSource | None = None) -> dict[str, 
                 pred = predictor(ck)
         except ValueError as e:
             raise SystemExit(f"sam3-infer: {e}") from None
-        scorer = (
-            CocoScorer(coco_split, cfg.get("coco_ann", "annotation.json"), specs)
-            if coco_split is not None
-            else None
-        )
         meta = {
             "model": "fine-tuned" if ck else "base",
             "checkpoint": ck and str(ck),
@@ -103,15 +98,18 @@ def run(cfg: DictConfig, predictor: PredictorSource | None = None) -> dict[str, 
             on_union=scorer.collect if scorer else None,
         )
         if scorer is not None:
-            result = scorer.finish(
-                out,
-                {
-                    "variant": meta["model"],
-                    "checkpoint": meta["checkpoint"],
-                    "model_label": label,
-                    "thresholds": {s.text: s.threshold for s in specs},
-                },
-            )
+            try:
+                result = scorer.finish(
+                    out,
+                    {
+                        "variant": meta["model"],
+                        "checkpoint": meta["checkpoint"],
+                        "model_label": label,
+                        "thresholds": {s.text: s.threshold for s in specs},
+                    },
+                )
+            except ValueError as e:
+                raise SystemExit(f"sam3-infer: {e}") from None
             summary["evaluation"] = result["summary"]
             summary["coco"] = scorer.mismatch()
         summaries[label] = summary
@@ -152,6 +150,16 @@ def main(cfg: DictConfig) -> None:
     if evaluations:
         print("\nforeground IoU / precision / recall (%) vs COCO ground truth")
         print(format_comparison(evaluations))
+        for key, what in (
+            ("prompts_without_category", "prompts with no COCO category (not scored)"),
+            (
+                "categories_without_prompt",
+                "COCO categories with no prompt (not scored)",
+            ),
+        ):
+            missing = next(iter(models.values()))["coco"][key]
+            if missing:
+                print(f"{what}: {missing}")
 
 
 if __name__ == "__main__":

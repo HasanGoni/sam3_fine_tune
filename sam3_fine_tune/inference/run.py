@@ -436,7 +436,9 @@ def make_predictor(
 
     @torch.no_grad()
     def segment(state: Any, spec: PromptSpec) -> "tuple[list[np.ndarray], list[float]]":
-        # text features replace the previous prompt's; image features in ``state`` are reused
+        # drop the previous prompt's text features and results (same as sam3-finetune's evaluation); the image
+        # features in ``state`` stay, so the backbone runs once per image
+        processor.reset_all_prompts(state)
         processor.confidence_threshold = spec.threshold
         out = processor.set_text_prompt(state=state, prompt=spec.text)
         masks = []

@@ -5,11 +5,7 @@ from omegaconf import OmegaConf
 
 from sam3_fine_tune.finetune.coco_eval import evaluate_coco
 from sam3_fine_tune.inference.cli import run
-from sam3_fine_tune.inference.run import (
-    model_label,
-    normalize_checkpoints,
-    Predictor,
-)
+from sam3_fine_tune.inference.run import model_label, normalize_checkpoints, Predictor
 from sam3_fine_tune.inference.score import format_comparison, match_prompts
 from sam3_fine_tune.sambaunet.data import CocoSemanticDataset
 
@@ -132,7 +128,9 @@ def test_checkpoint_list_with_base_gives_comparison_and_one_summary_per_model(
     table = format_comparison(ev)
     lines = table.splitlines()
     assert "base IoU" in lines[0] and "exp1_checkpoint R" in lines[0]
-    assert lines[-1].split()[0] == "ALL" and "100.00" in lines[-1] and "0.00" in lines[-1]
+    assert (
+        lines[-1].split()[0] == "ALL" and "100.00" in lines[-1] and "0.00" in lines[-1]
+    )
     assert any(l.startswith("bond wire") for l in lines)
 
 

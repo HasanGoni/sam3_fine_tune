@@ -22,7 +22,9 @@ from .run import PromptSpec
 
 @dataclass(frozen=True)
 class Match:
-    scored: list[tuple[PromptSpec, int]]  # (prompt, category index in the dataset), dataset order
+    scored: list[
+        tuple[PromptSpec, int]
+    ]  # (prompt, category index in the dataset), dataset order
     prompts_without_category: list[str]
     categories_without_prompt: list[str]
 
@@ -78,6 +80,7 @@ class CocoScorer:
         self.preds.setdefault(path.name, {})[spec.text] = union
 
     def finish(self, out_dir: str | Path, meta: dict[str, Any]) -> dict[str, Any]:
+        """Score the collected masks, write the summary file and reset for the next model."""
         idxs = [k for _, k in self.match.scored]
         texts = [s.text for s, _ in self.match.scored]
         scores = CategoryScores([self.ds.category_names[k] for k in idxs])
@@ -90,6 +93,7 @@ class CocoScorer:
                     f"{name}: prediction {pred.shape[1:]} does not match COCO mask {gt.shape[1:]}"
                 )
             scores.update(pred, gt, name)
+        self.preds = {}  # ready for the next model
         return write_result(
             scores,
             num_images=len(self.ds),
@@ -120,10 +124,22 @@ def format_comparison(evaluations: dict[str, dict[str, Any]]) -> str:
             )
         rows.append(row)
     rows.append(
-        ["ALL", *[v for m in labels for v in cells(evaluations[m]["overall"], ("foreground_iou", "precision", "recall"))]]
+        [
+            "ALL",
+            *[
+                v
+                for m in labels
+                for v in cells(
+                    evaluations[m]["overall"], ("foreground_iou", "precision", "recall")
+                )
+            ],
+        ]
     )
     widths = [max(len(r[i]) for r in rows) for i in range(len(rows[0]))]
     return "\n".join(
-        "  ".join(cell.ljust(w) if i == 0 else cell.rjust(w) for i, (cell, w) in enumerate(zip(r, widths)))
+        "  ".join(
+            cell.ljust(w) if i == 0 else cell.rjust(w)
+            for i, (cell, w) in enumerate(zip(r, widths))
+        )
         for r in rows
     )

@@ -207,7 +207,7 @@ sam3-infer coco_split=dataset/test ... 'checkpoint=[null, experiments/run1/check
 `coco_split` replaces `images`: the split's images are segmented and scored against the rasterised COCO masks. Scores are
 written to `out/multiclass_foreground_iou_summary.json` in the same layout as `sam3-finetune` and the SAMBA-UNet
 evaluation (they share the scoring code), so the numbers match `sam3-finetune --eval-only` for the same checkpoint,
-threshold and images; use `coco_ann=annotation_merged.json` to match its annotation file. With a checkpoint list, each model
+threshold and images (when every category has a prompt: `--eval-only` scores all categories, this scores the matching ones); use `coco_ann=annotation_merged.json` to match its annotation file. With a checkpoint list, each model
 writes to `out/<model>/` (`base`, or `<experiment>_<checkpoint name>`) with its own summary, and a side-by-side table of
 foreground IoU / precision / recall (%) per category is printed. Prompts without a matching category, and categories
 without a prompt, are reported on stderr and under `coco` in `summary.json` (and in the score file's `meta`); only
