@@ -11,7 +11,8 @@ in SAM3 but are not used yet (issue #17).
 **Instance**: one detected object for a prompt. A prediction for an image is zero or more instances, each with a mask and
 a score. The saved **combined mask** is the union of all instances.
 
-**Score / threshold**: SAM3's confidence per instance, and the cut-off below which an instance is dropped.
+**Score / threshold**: SAM3's confidence per instance, and the cut-off below which an instance is dropped (an instance is kept when its score is `>` the threshold).
+**Sweep**: a prompt with a list of thresholds. The model runs once at the lowest; higher ones only re-filter by score. Each threshold gets a `thr_<t>/` output folder.
 
 **Base model**: SAM3 with the released `sam3.pt` weights, no fine-tuning. **Fine-tuned model**: a **checkpoint** produced
 by this repo's training. Both need the tokenizer vocabulary (`bpe_simple_vocab_16e6.txt.gz`).
@@ -46,4 +47,4 @@ results compare key-by-key with SAM3.
 workspace is a staging copy. **Runbook skills**: the `.github/skills/*/SKILL.md` files describing HPC procedures.
 
 **Console scripts**: `sam3-dataset` (build or extend a dataset), `sam3-finetune` (train then evaluate), `sam3-infer`
-(run base or fine-tuned SAM3 with one or several text prompts, each with its own threshold, over a folder).
+(run base or fine-tuned SAM3 with one or several text prompts, each with one threshold or a sweep of thresholds, over a folder).

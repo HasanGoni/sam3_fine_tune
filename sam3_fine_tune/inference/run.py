@@ -269,7 +269,7 @@ def run_inference(
                     f"{path.name}: {len(masks)} masks but {len(scores)} scores for {spec.text!r}"
                 )
             levels = []
-            lowest = np.zeros(rgb.shape[:2], bool)
+            unions = []
             for t in spec.thresholds:
                 keep = (
                     [k for k, sc in enumerate(scores) if sc > t] if spec.sweep else None
@@ -277,8 +277,7 @@ def run_inference(
                 m_t = masks if keep is None else [masks[k] for k in keep]
                 s_t = scores if keep is None else [scores[k] for k in keep]
                 union = _union(m_t, rgb.shape[:2], path.name)
-                if t == spec.threshold:
-                    lowest = union
+                unions.append(union)
                 mask_dir = sub("masks", spec, t if spec.sweep else None)
                 Image.fromarray(union.astype(np.uint8) * 255).save(
                     mask_dir / f"{path.stem}.png"
@@ -288,7 +287,9 @@ def run_inference(
                         sub("overlays", spec, t) / f"{path.stem}.png"
                     )
                 levels.append({"threshold": t, **_stats(m_t, s_t, union)})
-            overlay = overlay_mask(overlay, lowest, color)
+            overlay = overlay_mask(
+                overlay, unions[0], color
+            )  # thresholds ascend: [0] is the lowest
             entry: dict[str, Any] = {"prompt": spec.text}
             if spec.sweep:
                 entry["sweep"] = levels

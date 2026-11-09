@@ -188,7 +188,7 @@ single number behaves as before; `overlays/<name>.png` shows every prompt at its
 
 The image backbone runs once per image and is reused for every prompt. With several prompts the masks go to
 `out/masks/<prompt>/<name>.png`, the overlay shows one colour per prompt, and `summary.json` has a per-prompt entry
-(instances, foreground pixels, scores, threshold used) under each image. Invalid config (empty list, duplicate texts,
+(instances, foreground pixels, scores, threshold used; a `sweep` list instead for swept prompts) under each image. Invalid config (empty list, duplicate texts,
 threshold outside (0, 1]) fails before the model loads, naming the entry. Each entry is `{type, text, threshold}`;
 `type: text` is the only kind today and the entry shape is the extension point for other prompt kinds (`PROMPT_TYPES`
 in `sam3_fine_tune/inference/run.py`). A single `prompt="..."` still works; set one of `prompt` / `prompts`, not both.

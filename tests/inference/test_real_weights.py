@@ -50,3 +50,19 @@ def test_two_prompts_with_different_thresholds_on_real_model(tmp_path):
         assert all(s > r["threshold"] for s in r["scores"])
     assert (tmp_path / "out" / "masks" / "pin" / "x.png").is_file()
     assert (tmp_path / "out" / "masks" / "crack" / "x.png").is_file()
+
+
+def test_threshold_sweep_on_real_model_is_monotonic(tmp_path):
+    import torch
+
+    img = tmp_path / "x.png"
+    rng = np.random.default_rng(0)
+    Image.fromarray(rng.integers(0, 255, (256, 256, 3), dtype=np.uint8)).save(img)
+    predictor = make_predictor(
+        CKPT, BPE, resolve_device("auto", torch.cuda.is_available())
+    )
+    specs = parse_prompts(None, [{"text": "pin", "threshold": [0.05, 0.2, 0.5]}], 0.5)
+    summary = run_inference([img], specs, tmp_path / "out", predictor)
+    counts = [lvl["instances"] for lvl in summary["images"][0]["sweep"]]
+    assert counts == sorted(counts, reverse=True)
+    assert (tmp_path / "out" / "masks" / "thr_0.05" / "x.png").is_file()
