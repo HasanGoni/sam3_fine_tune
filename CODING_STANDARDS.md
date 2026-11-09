@@ -13,7 +13,7 @@ judgement calls. Use the terms in `GLOSSARY.md`.
 
 ## Seams
 
-- Anything that calls a model takes the call as an injectable `predict` function, so output logic is tested with a
+- Anything that calls a model takes the call as an injectable `predict` function (or a small `Predictor` of `encode`/`segment` callables when the image should be encoded once and reused, as in `sam3-infer`), so output logic is tested with a
   fake. Loading weights lives in one `make_*predictor` function per module.
 - Validate user input before loading a model. Errors name the offending key and what to change; the CLI turns them into
   one `SystemExit` line, not a traceback.

@@ -8,8 +8,8 @@ from omegaconf import DictConfig, OmegaConf
 from .run import make_predictor, resolve_device, run_inference, validate_inputs
 
 
-def run(cfg: DictConfig, predict=None) -> dict:
-    """Validate, then run. ``predict`` (a ``Predictor``) is injectable; without it the real SAM3 is loaded."""
+def run(cfg: DictConfig, predictor=None) -> dict:
+    """Validate, then run. ``predictor`` (a ``Predictor``) is injectable; without it the real SAM3 is loaded."""
     try:
         prompts = cfg.get("prompts")
         paths, specs = validate_inputs(
@@ -21,11 +21,11 @@ def run(cfg: DictConfig, predict=None) -> dict:
             checkpoint=cfg.checkpoint,
             threshold=cfg.threshold,
         )
-        if predict is None:
+        if predictor is None:
             import torch
 
             device = resolve_device(cfg.device, torch.cuda.is_available())
-            predict = make_predictor(
+            predictor = make_predictor(
                 cfg.sam3_checkpoint, cfg.bpe_path, device, cfg.checkpoint
             )
         else:
@@ -39,7 +39,7 @@ def run(cfg: DictConfig, predict=None) -> dict:
         "default_threshold": cfg.threshold,
         "device": device,
     }
-    return run_inference(paths, specs, cfg.out, predict, meta)
+    return run_inference(paths, specs, cfg.out, predictor, meta)
 
 
 @hydra.main(config_path="conf", config_name="infer", version_base="1.3")

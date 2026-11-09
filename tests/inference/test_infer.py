@@ -85,7 +85,7 @@ def cfg(env, **kw):
 
 
 def test_writes_masks_overlays_and_summary(env):
-    s = run(cfg(env), predict=fake_predict)
+    s = run(cfg(env), predictor=fake_predict)
     out = env / "out"
     assert sorted(p.name for p in (out / "masks").iterdir()) == ["a.png", "b.png"]
     assert sorted(p.name for p in (out / "overlays").iterdir()) == ["a.png", "b.png"]
@@ -112,8 +112,8 @@ def test_writes_masks_overlays_and_summary(env):
 def test_finetuned_run_records_checkpoint_and_rerun_overwrites(env):
     ck = env / "ft.pt"
     ck.write_bytes(b"x")
-    run(cfg(env), predict=fake_predict)
-    s = run(cfg(env, checkpoint=str(ck), prompt="crack"), predict=fake_predict)
+    run(cfg(env), predictor=fake_predict)
+    s = run(cfg(env, checkpoint=str(ck), prompt="crack"), predictor=fake_predict)
     on_disk = json.loads((env / "out" / "summary.json").read_text())
     assert (
         on_disk["model"] == "fine-tuned"
@@ -136,7 +136,7 @@ def test_finetuned_run_records_checkpoint_and_rerun_overwrites(env):
 )
 def test_bad_config_fails_early_with_clear_message(env, kw, msg):
     with pytest.raises(SystemExit, match=msg):
-        run(cfg(env, **kw), predict=fake_predict)
+        run(cfg(env, **kw), predictor=fake_predict)
     assert not (env / "out").exists()
 
 
@@ -154,7 +154,7 @@ def test_empty_folder_and_stem_collision(env, tmp_path):
         )
     Image.fromarray(np.zeros((5, 5, 3), np.uint8)).save(env / "imgs" / "a.jpg")
     with pytest.raises(SystemExit, match="share a file stem"):
-        run(cfg(env), predict=fake_predict)
+        run(cfg(env), predictor=fake_predict)
 
 
 def test_mask_size_mismatch_is_an_error(env, tmp_path):
@@ -214,7 +214,7 @@ PROMPTS = [
 
 def test_several_prompts_write_per_prompt_masks_overlay_and_summary(env):
     pred = CountingPredictor()
-    s = run(cfg(env, prompt=None, prompts=PROMPTS, threshold=0.5), predict=pred)
+    s = run(cfg(env, prompt=None, prompts=PROMPTS, threshold=0.5), predictor=pred)
     out = env / "out"
     assert sorted(p.name for p in (out / "masks").iterdir()) == [
         "bond_wire",
@@ -243,14 +243,14 @@ def test_several_prompts_write_per_prompt_masks_overlay_and_summary(env):
 
 def test_per_prompt_threshold_overrides_default_and_unset_uses_default(env):
     pred = CountingPredictor()
-    run(cfg(env, prompt=None, prompts=PROMPTS, threshold=0.5), predict=pred)
+    run(cfg(env, prompt=None, prompts=PROMPTS, threshold=0.5), predictor=pred)
     used = {(t, thr) for n, t, thr in pred.calls["segment"] if n == "a.png"}
     assert used == {("pin", 0.3), ("crack", 0.8), ("bond wire", 0.5)}
 
 
 def test_image_backbone_runs_once_per_image_regardless_of_prompt_count(env):
     pred = CountingPredictor()
-    run(cfg(env, prompt=None, prompts=PROMPTS), predict=pred)
+    run(cfg(env, prompt=None, prompts=PROMPTS), predictor=pred)
     assert pred.calls["encode"] == 2  # 2 images, 3 prompts
     assert len(pred.calls["segment"]) == 6
 
@@ -277,7 +277,7 @@ def test_image_backbone_runs_once_per_image_regardless_of_prompt_count(env):
 def test_invalid_prompt_config_fails_before_model_load_naming_the_entry(
     env, prompts, msg
 ):
-    # predict=None would load the real model; validation must raise before that
+    # predictor=None would load the real model; validation must raise before that
     with pytest.raises(SystemExit, match=msg):
         run(cfg(env, prompt=None, prompts=prompts))
     assert not (env / "out").exists()

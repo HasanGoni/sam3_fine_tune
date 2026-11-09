@@ -26,7 +26,7 @@ DEVICES = ("auto", "cpu", "cuda")
 SUMMARY_NAME = "summary.json"
 PROMPT_TYPES = (
     "text",
-)  # extension point: add new prompt kinds here and handle them in make_predictor
+)  # extension point: add a kind here, then dispatch on spec.type in make_predictor's segment()
 PROMPT_KEYS = {"type", "text", "threshold"}
 PALETTE = (
     (255, 0, 0),
@@ -204,7 +204,7 @@ def run_inference(
             path
         )  # image backbone: once per image, shared by all prompts
         overlay, per_prompt = rgb, []
-        for k, spec in enumerate(specs):
+        for idx, spec in enumerate(specs):
             masks, scores = predictor.segment(handle, spec)
             union = np.zeros(rgb.shape[:2], bool)
             for m in masks:
@@ -217,7 +217,7 @@ def run_inference(
             Image.fromarray(union.astype(np.uint8) * 255).save(
                 mask_dirs[spec.slug] / f"{path.stem}.png"
             )
-            overlay = overlay_mask(overlay, union, PALETTE[k % len(PALETTE)])
+            overlay = overlay_mask(overlay, union, PALETTE[idx % len(PALETTE)])
             per_prompt.append(
                 {
                     "prompt": spec.text,
@@ -232,7 +232,7 @@ def run_inference(
         if multi:
             row["prompts"] = per_prompt
         else:  # single-prompt layout from #13 is unchanged
-            row.update({k: v for k, v in per_prompt[0].items() if k != "prompt"})
+            row.update({key: v for key, v in per_prompt[0].items() if key != "prompt"})
         rows.append(row)
     summary = {
         **(meta or {}),

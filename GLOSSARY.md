@@ -46,4 +46,4 @@ results compare key-by-key with SAM3.
 workspace is a staging copy. **Runbook skills**: the `.github/skills/*/SKILL.md` files describing HPC procedures.
 
 **Console scripts**: `sam3-dataset` (build or extend a dataset), `sam3-finetune` (train then evaluate), `sam3-infer`
-(run base or fine-tuned SAM3 with one prompt over a folder).
+(run base or fine-tuned SAM3 with one or several text prompts, each with its own threshold, over a folder).
