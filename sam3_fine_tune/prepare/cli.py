@@ -69,6 +69,12 @@ def _prepare(cfg: DictConfig) -> None:
             f"warning: similar category names, probably one category: {group}",
             file=sys.stderr,
         )
+    if report["recipe_missing_categories"]:
+        print(
+            "warning: recipe.yaml (kept, not overwritten) lacks categories "
+            f"{report['recipe_missing_categories']}; add them before training",
+            file=sys.stderr,
+        )
     if report["images"]["val"] == 0:
         print("warning: the val split is empty", file=sys.stderr)
 

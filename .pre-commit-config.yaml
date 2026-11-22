@@ -20,6 +20,6 @@ repos:
       - id: mypy
         name: mypy (sam3-infer)
         language: python
-        additional_dependencies: [mypy==1.13.0, numpy, omegaconf, hydra-core, types-Pillow]
+        additional_dependencies: [mypy==1.13.0, numpy, omegaconf, hydra-core, types-Pillow, types-PyYAML]
         entry: mypy  # flags live in [tool.mypy] in pyproject.toml
-        files: ^sam3_fine_tune/(inference/(run|cli|score)|prepare/(ops|cli|ingest))\.py$
+        files: ^sam3_fine_tune/(inference/(run|cli|score)|prepare/(ops|cli|ingest|unveil_view))\.py$

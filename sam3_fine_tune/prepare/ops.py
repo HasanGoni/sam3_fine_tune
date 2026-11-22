@@ -16,9 +16,10 @@ import shutil
 from collections.abc import Iterable
 from pathlib import Path, PurePosixPath
 
+from .unveil_view import PREPARED, write_unveil_view
+
 SPLITS = ("train", "test")
 VIEW_SPLITS = ("train", "val", "test")
-PREPARED = "prepared"
 
 
 def _annotation_file(split_dir: Path) -> Path | None:
@@ -63,6 +64,11 @@ def _scan(root: Path) -> tuple[list[dict], dict]:
             if absent:
                 found["problems"].append(
                     f"{split}/{ann.name}: annotation {a.get('id')} has no {absent[0]!r}"
+                )
+                continue
+            if not isinstance(a["segmentation"], list):
+                found["problems"].append(
+                    f"{split}/{ann.name}: annotation {a.get('id')} is not a polygon list (RLE masks are not supported)"
                 )
                 continue
             if a["category_id"] not in names:
@@ -305,8 +311,7 @@ def prepare_dataset(
             for h in sorted(images, key=ids.__getitem__)
         },
     }
-    if not dry_run:
-        _write(root, views, sources, manifest)
+    gaps = [] if dry_run else _write(root, views, sources, manifest)
     return {
         "problems": [],
         "images": {s: len(v["images"]) for s, v in views.items()},
@@ -315,11 +320,12 @@ def prepare_dataset(
         "missing_images": found["missing"],
         "splits_without_annotations": found["no_annotations"],
         "categories": categories,
+        "recipe_missing_categories": gaps,
         "similar_category_names": _similar_names(categories),
     }
 
 
-def _write(root: Path, views: dict, sources: dict, manifest: dict) -> None:
+def _write(root: Path, views: dict, sources: dict, manifest: dict) -> list[str]:
     """Build the whole view beside the old one and swap it in, so a failure never leaves a half-written ``prepared/``."""
     final, tmp = root / PREPARED, root / f"{PREPARED}.tmp"
     shutil.rmtree(tmp, ignore_errors=True)
@@ -343,6 +349,7 @@ def _write(root: Path, views: dict, sources: dict, manifest: dict) -> None:
                     ),
                     link,
                 )
+        gaps = write_unveil_view(tmp, views, manifest["categories"], final)
         old = root / f"{PREPARED}.old"
         shutil.rmtree(old, ignore_errors=True)
         if final.exists():
@@ -351,6 +358,7 @@ def _write(root: Path, views: dict, sources: dict, manifest: dict) -> None:
             )  # the previous view stays recoverable until the new one is in place
         os.replace(tmp, final)
         shutil.rmtree(old, ignore_errors=True)
+        return gaps
     except BaseException:
         shutil.rmtree(tmp, ignore_errors=True)
         raise
