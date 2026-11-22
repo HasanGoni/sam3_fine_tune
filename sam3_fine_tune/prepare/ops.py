@@ -39,7 +39,12 @@ def _scan(root: Path) -> tuple[list[dict], dict]:
     """One record per COCO image entry that has its file (hash, origin split, entry, annotations by category name),
     plus ``{"missing": [...], "no_annotations": [...], "problems": [...]}`` for what could not be read."""
     records: list[dict] = []
-    found: dict = {"missing": [], "no_annotations": [], "problems": []}
+    found: dict = {
+        "missing": [],
+        "no_annotations": [],
+        "problems": [],
+        "categories": set(),
+    }
     for split in SPLITS:
         ann = _annotation_file(root / split)
         if ann is None:
@@ -48,8 +53,17 @@ def _scan(root: Path) -> tuple[list[dict], dict]:
             continue
         coco = json.loads(ann.read_text())
         names = {c["id"]: c["name"] for c in coco["categories"]}
+        found["categories"].update(names.values())
         by_image: dict[int, list[dict]] = {}
         for a in coco["annotations"]:
+            absent = [
+                k for k in ("image_id", "category_id", "segmentation") if k not in a
+            ]
+            if absent:
+                found["problems"].append(
+                    f"{split}/{ann.name}: annotation {a.get('id')} has no {absent[0]!r}"
+                )
+                continue
             if a["category_id"] not in names:
                 found["problems"].append(
                     f"{split}/{ann.name}: annotation {a['id']} has unknown category id {a['category_id']}"
@@ -169,7 +183,7 @@ def prepare_dataset(
     if problems:
         return {"problems": problems}
 
-    dropped = {s: 0 for s in VIEW_SPLITS}
+    dropped = {s: 0 for s in SPLITS}
     for h in sorted(images):
         if not images[h]["annotations"]:
             dropped[assigned.pop(h)] += 1
@@ -181,13 +195,13 @@ def prepare_dataset(
     n_val = round(val_fraction * len(train))
     if val_fraction > 0 and len(train) > 1:
         n_val = max(1, n_val)
+    n_val = min(n_val, max(len(train) - 1, 0))  # train never ends up empty
     for h in train[:n_val]:
         assigned[h] = "val"
 
-    categories: dict[str, int] = {}
-    for h in sorted(images):
-        for a in images[h]["annotations"]:
-            categories.setdefault(a["category"], len(categories) + 1)
+    # every category the source declares, even one with no kept annotation (SAM3 queries all of them); ids by
+    # name, so they do not depend on which pictures are present
+    categories = {n: i for i, n in enumerate(sorted(found["categories"]), 1)}
     ids = {h: i for i, h in enumerate(sorted(images), 1)}
     views: dict[str, dict] = {
         s: {
@@ -265,8 +279,14 @@ def _write(root: Path, views: dict, sources: dict, manifest: dict) -> None:
                     ),
                     link,
                 )
-        shutil.rmtree(final, ignore_errors=True)
+        old = root / f"{PREPARED}.old"
+        shutil.rmtree(old, ignore_errors=True)
+        if final.exists():
+            os.replace(
+                final, old
+            )  # the previous view stays recoverable until the new one is in place
         os.replace(tmp, final)
+        shutil.rmtree(old, ignore_errors=True)
     except BaseException:
         shutil.rmtree(tmp, ignore_errors=True)
         raise

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sys
+
 import hydra
 from omegaconf import DictConfig, OmegaConf
 
@@ -27,6 +29,14 @@ def main(cfg: DictConfig) -> None:
         raise SystemExit(
             f"prepare found {len(report['problems'])} problem(s), first: {report['problems'][0]}"
         )
+    if report["missing_images"]:
+        print(
+            f"warning: {len(report['missing_images'])} image file(s) not found and left out, "
+            f"first: {report['missing_images'][0]}",
+            file=sys.stderr,
+        )
+    if report["images"]["val"] == 0:
+        print("warning: the val split is empty", file=sys.stderr)
 
 
 if __name__ == "__main__":

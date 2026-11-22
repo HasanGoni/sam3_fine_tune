@@ -76,7 +76,7 @@ def test_images_without_any_annotation_are_dropped_and_counted(root):
 
     p = run_prepare(path, "val_fraction=0")
 
-    assert report(p)["dropped_unannotated"] == {"train": 1, "val": 0, "test": 0}
+    assert report(p)["dropped_unannotated"] == {"train": 1, "test": 0}
     assert list(view(path, "train")) == ["labelled.png"]
 
 
@@ -246,3 +246,78 @@ def test_file_names_that_leave_the_images_folder_are_rejected(root, tmp_path):
         and "/etc/hostname" in p.stdout
     )
     assert not (path / "prepared").exists() and not (tmp_path / "evil.png").exists()
+
+
+def test_a_high_val_fraction_never_empties_train(root):
+    root.add("train", "a.png", 1, {"chip": BOX}).add("train", "b.png", 2, {"chip": BOX})
+    path = root.write()
+
+    p = run_prepare(path, "val_fraction=0.95")
+
+    assert (
+        p.returncode == 0
+        and len(view(path, "train")) == 1
+        and len(view(path, "val")) == 1
+    )
+
+
+def test_a_declared_category_without_kept_annotations_stays_in_the_view(root):
+    root.add("train", "a.png", 1, {"chip": BOX}).add("train", "empty.png", 2, {})
+    path = root.write()
+    f = path / "train" / "annotation.json"
+    d = json.loads(f.read_text())
+    d["categories"].append({"id": 9, "name": "crack"})
+    f.write_text(json.dumps(d))
+
+    run_prepare(path, "val_fraction=0")
+
+    v = json.loads((path / "prepared/sam3/train/annotation_merged.json").read_text())
+    assert sorted(c["name"] for c in v["categories"]) == ["chip", "crack"]
+
+
+def test_category_ids_do_not_depend_on_which_pictures_are_present(root):
+    root.add("train", "a.png", 1, {"chip": BOX, "crack": BOX}).add(
+        "train", "b.png", 2, {"crack": BOX}
+    )
+    first = root.write()
+    run_prepare(first, "val_fraction=0")
+    ids = json.loads((first / "prepared/manifest.json").read_text())["categories"]
+
+    (first / "train" / "images" / "c.png").write_bytes(
+        (first / "train/images/a.png").read_bytes()
+    )
+    f = first / "train" / "annotation.json"
+    d = json.loads(f.read_text())
+    d["images"].insert(0, {"id": 99, "file_name": "c.png", "width": 64, "height": 64})
+    d["annotations"].append({**d["annotations"][0], "id": 99, "image_id": 99})
+    f.write_text(json.dumps(d))
+    run_prepare(first, "val_fraction=0")
+
+    assert (
+        json.loads((first / "prepared/manifest.json").read_text())["categories"] == ids
+    )
+
+
+def test_an_annotation_without_a_segmentation_is_a_problem_not_a_crash(root):
+    path = _ten(root)
+    f = path / "train" / "annotation.json"
+    d = json.loads(f.read_text())
+    del d["annotations"][0]["segmentation"]
+    f.write_text(json.dumps(d))
+
+    p = run_prepare(path, "val_fraction=0")
+
+    assert (
+        p.returncode != 0 and "segmentation" in p.stdout and "Traceback" not in p.stderr
+    )
+
+
+def test_missing_images_and_an_empty_val_are_warned_about_on_stderr(root):
+    root.add("train", "here.png", 1, {"chip": BOX})
+    root.add("train", "gone.png", 2, {"chip": BOX}, write_file=False)
+    path = root.write()
+
+    p = run_prepare(path, "val_fraction=0")
+
+    assert p.returncode == 0
+    assert "gone.png" in p.stderr and "val" in p.stderr
