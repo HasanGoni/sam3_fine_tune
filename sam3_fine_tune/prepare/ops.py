@@ -27,7 +27,7 @@ def _annotation_file(split_dir: Path) -> Path | None:
     return None
 
 
-def _sha256(path: Path) -> str:
+def sha256_file(path: Path) -> str:
     h = hashlib.sha256()
     with open(path, "rb") as f:
         for block in iter(lambda: f.read(1 << 20), b""):
@@ -87,7 +87,7 @@ def _scan(root: Path) -> tuple[list[dict], dict]:
                 continue
             records.append(
                 {
-                    "hash": _sha256(path),
+                    "hash": sha256_file(path),
                     "split": split,
                     "entry": im,
                     "path": path,

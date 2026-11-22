@@ -173,3 +173,66 @@ def test_missing_input_folders_are_reported_clearly(raw, tmp_path):
         ops.add_category_data(imgs, tmp_path / "nope", "crack", tmp_path / "ds")
     with pytest.raises(FileNotFoundError, match="images folder not found"):
         ops.add_category_data(tmp_path / "nope", masks, "crack", tmp_path / "ds")
+
+
+def add(raw, into, category, **kw):
+    imgs, masks = raw
+    return ops.add_category_data(
+        imgs, masks, category, into, **{"test_fraction": 0.25, "seed": 0, **kw}
+    )
+
+
+def test_a_second_category_over_the_same_images_warns_and_still_adds(raw, tmp_path):
+    into = tmp_path / "ds"
+    first = add(raw, into, "substrate")
+
+    second = add(raw, into, "chip")
+
+    assert first["warnings"] == []
+    (warning,) = second["warnings"]
+    assert "8 image(s)" in warning and "sam3-prepare" in warning
+    assert second["added"] == {"train": 6, "test": 2}  # behaviour unchanged
+
+
+def test_rerunning_the_same_category_is_not_reported_as_a_duplicate(raw, tmp_path):
+    into = tmp_path / "ds"
+    add(raw, into, "crack")
+
+    again = add(raw, into, "crack")
+
+    assert again["warnings"] == [] and again["skipped_existing"] == 8
+
+
+def test_different_images_for_a_second_category_do_not_warn(raw, tmp_path):
+    into = tmp_path / "ds"
+    add(raw, into, "substrate")
+    imgs, masks = raw
+    other = tmp_path / "other"
+    other.mkdir()
+    for p in imgs.iterdir():
+        arr = np.asarray(Image.open(p)).copy()
+        arr[0, 0] = 255 - arr[0, 0]  # a different picture with the same name
+        Image.fromarray(arr).save(other / p.name)
+
+    second = ops.add_category_data(other, masks, "chip", into, test_fraction=0.25)
+
+    assert second["warnings"] == []
+
+
+def test_the_dry_run_warning_says_would_not_were(raw, tmp_path):
+    into = tmp_path / "ds"
+    add(raw, into, "substrate")
+
+    second = add(raw, into, "chip", dry_run=True)
+
+    assert "would be added" in second["warnings"][0]
+
+
+def test_a_folder_inside_images_does_not_break_the_duplicate_check(raw, tmp_path):
+    into = tmp_path / "ds"
+    add(raw, into, "substrate")
+    (into / "train" / "images" / "stray_folder").mkdir()
+
+    second = add(raw, into, "chip")
+
+    assert len(second["warnings"]) == 1

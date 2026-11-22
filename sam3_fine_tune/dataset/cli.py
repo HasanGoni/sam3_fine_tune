@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sys
+
 import hydra
 from omegaconf import DictConfig, OmegaConf
 
@@ -22,6 +24,8 @@ def main(cfg: DictConfig) -> None:
         dry_run=cfg.dry_run,
     )
     print(OmegaConf.to_yaml(OmegaConf.create(report)))
+    for warning in report.get("warnings", []):
+        print(f"warning: {warning}", file=sys.stderr)
     if report["problems"]:
         raise SystemExit(
             f"dataset validation found {len(report['problems'])} problem(s), first: {report['problems'][0]}"

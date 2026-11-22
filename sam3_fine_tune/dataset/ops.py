@@ -15,6 +15,7 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image
+from sam3_fine_tune.prepare.ops import sha256_file
 
 from sam3_fine_tune.preprocessing.coco_format import mask_to_coco
 
@@ -76,6 +77,35 @@ def _check_sizes(pairs) -> None:
                 raise ValueError(
                     f"{img.name}: mask size {b.size} != image size {a.size} ({mask.name})"
                 )
+
+
+def _duplicates_of_existing(pairs, into: Path, prefix: str) -> int:
+    """How many images to add are byte-identical to an image already in the dataset under another file name.
+
+    Only files whose size equals that of an image to add are hashed, so a large dataset is not read in full. Images
+    that would be skipped as already added (same file name) are not counted."""
+    existing: dict[int, list[Path]] = {}
+    for split in SPLITS:
+        folder = into / split / "images"
+        if folder.is_dir():
+            for p in folder.iterdir():
+                if p.is_file():
+                    existing.setdefault(p.stat().st_size, []).append(p)
+    taken = {p.name for paths in existing.values() for p in paths}
+    seen: dict[Path, str] = {}
+    count = 0
+    for img, _ in pairs:
+        candidates = existing.get(img.stat().st_size, [])
+        if f"{prefix}_{img.name}" in taken or not candidates:
+            continue
+        digest = sha256_file(img)
+        for c in candidates:
+            if c not in seen:
+                seen[c] = sha256_file(c)
+            if seen[c] == digest:
+                count += 1
+                break
+    return count
 
 
 def _load(path: Path) -> dict:
@@ -151,6 +181,7 @@ def add_category_data(
         raise ValueError(
             f"category '{category}' not found in {into}; use mode=new or mode=auto"
         )
+    duplicates = _duplicates_of_existing(pairs, into, prefix)
     resolved = "extend" if existing_id is not None else "new"
     cat_id = existing_id if existing_id is not None else next_id
     all_cats = {c["id"]: c["name"] for f in all_files for c in _load(f)["categories"]}
@@ -165,6 +196,14 @@ def add_category_data(
         "annotations_added": 0,
         "skipped_existing": 0,
         "unmatched": unmatched,
+        "warnings": [
+            f"{duplicates} image(s) already exist in {into} under another file name; "
+            f"{'they would be added' if dry_run else 'they were added'} as separate COCO "
+            "images with one category each, and may land in both train and test. "
+            "Run `sam3-prepare` to merge them by picture"
+        ]
+        if duplicates
+        else [],
         "dry_run": dry_run,
     }
     for split in SPLITS:

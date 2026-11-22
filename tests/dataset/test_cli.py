@@ -51,3 +51,27 @@ def test_cli_dry_run_changes_nothing(raw, tmp_path):
 def test_console_script_is_registered_in_pyproject():
     scripts = tomllib.loads((REPO / "pyproject.toml").read_text())["project"]["scripts"]
     assert scripts["sam3-dataset"] == "sam3_fine_tune.dataset.cli:main"
+
+
+def test_cli_prints_the_duplicate_image_warning_on_stderr(raw, tmp_path):
+    imgs, masks = raw
+
+    def run(category):
+        return subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "sam3_fine_tune.dataset",
+                f"images={imgs}",
+                f"masks={masks}",
+                f"category={category}",
+                f"into={tmp_path / 'ds'}",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=REPO,
+        )
+
+    assert "sam3-prepare" not in run("substrate").stderr
+    p = run("chip")
+    assert p.returncode == 0 and "sam3-prepare" in p.stderr
