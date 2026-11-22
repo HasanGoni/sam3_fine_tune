@@ -228,3 +228,21 @@ def test_val_fraction_must_be_between_zero_and_one(root):
         p = run_prepare(path, f"val_fraction={bad}")
         assert p.returncode != 0 and "val_fraction" in p.stderr
         assert "Traceback" not in p.stderr
+
+
+def test_file_names_that_leave_the_images_folder_are_rejected(root, tmp_path):
+    path = _ten(root)
+    f = path / "train" / "annotation.json"
+    d = json.loads(f.read_text())
+    d["images"][0]["file_name"] = "../../evil.png"
+    d["images"][1]["file_name"] = "/etc/hostname"
+    f.write_text(json.dumps(d))
+
+    p = run_prepare(path, "val_fraction=0")
+
+    assert (
+        p.returncode != 0
+        and "../../evil.png" in p.stdout
+        and "/etc/hostname" in p.stdout
+    )
+    assert not (path / "prepared").exists() and not (tmp_path / "evil.png").exists()

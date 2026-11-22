@@ -13,7 +13,7 @@ import hashlib
 import json
 import os
 import shutil
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 SPLITS = ("train", "test")
 VIEW_SPLITS = ("train", "val", "test")
@@ -57,6 +57,16 @@ def _scan(root: Path) -> tuple[list[dict], dict]:
                 continue
             by_image.setdefault(a["image_id"], []).append(a)
         for im in coco["images"]:
+            parts = PurePosixPath(im["file_name"]).parts
+            if (
+                not parts
+                or PurePosixPath(im["file_name"]).is_absolute()
+                or ".." in parts
+            ):
+                found["problems"].append(
+                    f"{split}/{ann.name}: file_name {im['file_name']!r} is not inside the images folder"
+                )
+                continue
             path = root / split / "images" / im["file_name"]
             if not path.is_file():
                 found["missing"].append(f"{split}/{im['file_name']}")
@@ -244,6 +254,8 @@ def _write(root: Path, views: dict, sources: dict, manifest: dict) -> None:
             (d / "annotation_merged.json").write_text(json.dumps(view, indent=2))
             for file_name, src in sources[split]:
                 link = d / "images" / file_name
+                if not link.resolve().is_relative_to(tmp.resolve()):
+                    raise ValueError(f"refusing to write outside {tmp}: {file_name!r}")
                 link.parent.mkdir(parents=True, exist_ok=True)
                 # relative to where the link will live after the swap, so the root can be moved as a whole
                 where = final / "sam3" / split / "images" / file_name
