@@ -11,6 +11,8 @@ paths:
   # CHANGELOG.md 2026-07-20). thin_wire instances split by gate_pad priority
   # are now merged into single annotations before COCO conversion.
   pin_dir_root: /home/hpc_storage/data/projects/userB/sam3_data/9cat_separated_wires_v3
+  # split read by in-training validation and its evaluators; sam3-finetune sets `val` for a sam3-prepare root
+  val_split: test
   # (Ha) Changed 2026-07-19: new experiment dir for the clDice-loss validation
   # run (see CHANGELOG.md 2026-07-19 and sam3/train/loss/loss_fns.py's
   # soft_cldice_loss() docstring). The previous experiment_log_dir
@@ -344,9 +346,9 @@ trainer:
           include_negatives: true
           category_chunk_size: 9 
           _partial_: true
-        img_folder: ${paths.pin_dir_root}/test/images/
+        img_folder: ${paths.pin_dir_root}/${paths.val_split}/images/
         # (Ha) Added 2026-07-19: see matching train ann_file comment above.
-        ann_file: ${paths.pin_dir_root}/test/annotation_merged.json
+        ann_file: ${paths.pin_dir_root}/${paths.val_split}/annotation_merged.json
         transforms: ${pin_train.val_transforms}
         max_ann_per_img: 100000
         multiplier: 1
@@ -383,7 +385,7 @@ trainer:
           maxdets: 100
           pred_file_evaluators:
             - _target_: sam3.eval.coco_eval_offline.CocoEvaluatorOfflineWithPredFileEvaluators
-              gt_path: ${paths.pin_dir_root}/test/annotation_merged.json
+              gt_path: ${paths.pin_dir_root}/${paths.val_split}/annotation_merged.json
               tide: False
               iou_type: "segm"      
             # (Ha) Added 2026-07-19: automatic per-category AP/AR breakdown +
@@ -398,8 +400,8 @@ trainer:
             # per-category performance -- e.g. thick_wire/thin_wire/gate_pad
             # scored 0.19-0.37 AP while the aggregate read 0.657).
             - _target_: sam3.eval.per_category_eval.PerCategoryEvalWithOverlays
-              gt_path: ${paths.pin_dir_root}/test/annotation_merged.json
-              img_folder: ${paths.pin_dir_root}/test/images/
+              gt_path: ${paths.pin_dir_root}/${paths.val_split}/annotation_merged.json
+              img_folder: ${paths.pin_dir_root}/${paths.val_split}/images/
               overlay_dir: ${launcher.experiment_log_dir}/dumps/category_overlays
               iou_type: "segm"
               num_overlay_samples: 1

@@ -37,6 +37,7 @@ def build_train_config(
     grad_accum=None,
     accelerator=None,
     num_gpus=None,
+    val_split="test",
 ) -> DictConfig:
     """Load ``base`` (interpolations preserved) and apply the overrides; ``None`` keeps the base value."""
     cfg = OmegaConf.load(base)
@@ -52,6 +53,9 @@ def build_train_config(
     _set(cfg, "scratch.train_batch_size", train_batch_size)
     _set(cfg, "scratch.val_batch_size", val_batch_size)
     _set(cfg, "scratch.gradient_accumulation_steps", grad_accum)
+    _set(
+        cfg, "paths.val_split", val_split
+    )  # validation and its evaluators read this split
     for split in (
         "train",
         "val",
@@ -68,27 +72,36 @@ def build_train_config(
     return cfg
 
 
+def _has_annotations(split_dir: Path) -> bool:
+    return any((split_dir / n).exists() for n in ("annotation.json", MERGED_NAME))
+
+
+def choose_val_split(root) -> str:
+    """``val`` when the root has one (a ``sam3-prepare`` view), else ``test`` as before."""
+    val = Path(root) / "val"
+    has_images = (val / "images").is_dir() and any((val / "images").iterdir())
+    return "val" if has_images and _has_annotations(val) else "test"
+
+
 def validate_dataset(root) -> None:
     """Fail early, before any GPU time is spent, if the dataset is not in the standard layout."""
     root = Path(root)
-    for rel in (
-        "train/images",
-        "test/images",
-        "train/annotation.json",
-        "test/annotation.json",
-    ):
-        if not (root / rel).exists():
+    for split in ("train", "test"):
+        if not (root / split / "images").exists() or not _has_annotations(root / split):
             raise FileNotFoundError(
-                f"dataset layout is <root>/{{train,test}}/{{images,annotation.json}}: missing {root / rel}"
+                f"dataset layout is <root>/{{train,test}}/{{images, annotation.json or annotation_merged.json}}: "
+                f"{root / split} lacks images/ or an annotation file"
             )
 
 
 def ensure_merged_annotations(root) -> None:
-    """The shipped configs read ``annotation_merged.json``; create it as a copy of ``annotation.json`` if absent."""
-    for split in ("train", "test"):
+    """The shipped configs read ``annotation_merged.json``; create it as a copy of ``annotation.json`` if absent
+    (a root that has only the merged file, such as a ``sam3-prepare`` view, is left as it is)."""
+    for split in ("train", "val", "test"):
+        ann = Path(root) / split / "annotation.json"
         merged = Path(root) / split / MERGED_NAME
-        if not merged.exists():
-            shutil.copyfile(Path(root) / split / "annotation.json", merged)
+        if ann.exists() and not merged.exists():
+            shutil.copyfile(ann, merged)
 
 
 def find_best_checkpoint(experiment_dir) -> Path:

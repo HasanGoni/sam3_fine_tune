@@ -77,7 +77,7 @@ def test_val_runs_at_least_once_for_short_trainings(tmp_path):
 
 
 def test_validate_dataset_reports_what_is_missing(tmp_path):
-    with pytest.raises(FileNotFoundError, match="train/images"):
+    with pytest.raises(FileNotFoundError, match="lacks images"):
         validate_dataset(tmp_path)
 
 
@@ -107,3 +107,77 @@ def test_best_checkpoint_prefers_the_best_ap_then_falls_back(tmp_path):
     assert (
         find_best_checkpoint(tmp_path).name == "val_pin_detection_coco_eval_segm_AP.pt"
     )
+
+
+def _prepared_like(coco_root):
+    """What `sam3-prepare` writes under prepared/sam3: train, val, test, each with annotation_merged.json only."""
+    import shutil
+
+    shutil.copytree(coco_root / "test", coco_root / "val")
+    for split in ("train", "val", "test"):
+        (coco_root / split / "annotation.json").rename(
+            coco_root / split / "annotation_merged.json"
+        )
+    return coco_root
+
+
+def _strings(node):
+    if isinstance(node, str):
+        yield node
+    elif isinstance(node, dict):
+        for v in node.values():
+            yield from _strings(v)
+    elif isinstance(node, list):
+        for v in node:
+            yield from _strings(v)
+
+
+def test_every_validation_path_reads_the_val_split_when_asked(tmp_path):
+    cfg = build_train_config(
+        BASE_CONFIG, data_root="/d", experiment_dir=tmp_path, val_split="val", **KW
+    )
+    val = OmegaConf.to_container(cfg, resolve=True)["trainer"]["data"]["val"]
+    assert val["dataset"]["img_folder"] == "/d/val/images/"
+    assert val["dataset"]["ann_file"] == "/d/val/annotation_merged.json"
+    paths = [
+        s
+        for s in _strings(
+            OmegaConf.to_container(cfg, resolve=True)["trainer"]["meters"]
+        )
+        if s.startswith("/d/")
+    ]
+    assert paths and all(
+        p.startswith("/d/val/") for p in paths
+    )  # the evaluators' gt_path / img_folder
+    assert not [s for s in _strings(val) if s.startswith("/d/test")]
+
+
+def test_validation_keeps_reading_test_by_default(tmp_path):
+    cfg = build_train_config(BASE_CONFIG, data_root="/d", experiment_dir=tmp_path, **KW)
+    ds = OmegaConf.to_container(cfg, resolve=True)["trainer"]["data"]["val"]["dataset"]
+    assert ds["ann_file"] == "/d/test/annotation_merged.json"
+
+
+def test_a_prepared_root_with_only_merged_annotations_is_a_valid_dataset(coco_root):
+    validate_dataset(_prepared_like(coco_root))
+
+
+def test_a_prepared_root_is_not_given_an_annotation_json(coco_root):
+    ensure_merged_annotations(_prepared_like(coco_root))
+    assert not (coco_root / "train" / "annotation.json").exists()
+
+
+def test_val_split_is_val_only_when_the_root_has_one(coco_root):
+    from sam3_fine_tune.finetune.config import choose_val_split
+
+    assert choose_val_split(coco_root) == "test"
+    assert choose_val_split(_prepared_like(coco_root)) == "val"
+
+
+def test_an_empty_val_split_is_not_chosen(coco_root):
+    from sam3_fine_tune.finetune.config import choose_val_split
+
+    _prepared_like(coco_root)
+    for f in (coco_root / "val" / "images").iterdir():
+        f.unlink()
+    assert choose_val_split(coco_root) == "test"

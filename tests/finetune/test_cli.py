@@ -90,3 +90,23 @@ def test_console_script_is_registered_in_pyproject():
         (Path(cli.__file__).parents[2] / "pyproject.toml").read_text()
     )["project"]["scripts"]
     assert scripts["sam3-finetune"] == "sam3_fine_tune.finetune.cli:main"
+
+
+def test_a_prepared_root_validates_on_val_and_evaluates_on_test(fake):
+    import shutil
+
+    calls, args = fake
+    root = Path(args[1])
+    shutil.copytree(root / "test", root / "val")
+    for split in ("train", "val", "test"):
+        (root / split / "annotation.json").rename(
+            root / split / "annotation_merged.json"
+        )
+    assert cli.main(args) == 0
+    from omegaconf import OmegaConf
+
+    cfg = OmegaConf.create(calls["train"][0])
+    assert (
+        cfg.paths.val_split == "val"
+    )  # validation and its evaluators; the test split is not read in training
+    assert calls["eval"]["split_dir"].name == "test"

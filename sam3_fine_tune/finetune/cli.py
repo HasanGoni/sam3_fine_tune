@@ -3,7 +3,9 @@
     python -m sam3_fine_tune.finetune --data-root /path/to/dataset --sam3-checkpoint sam3.pt --bpe-path bpe.txt.gz \
         --epochs 10 [--skip-eval | --eval-only] [--accelerator auto|cuda|cpu]
 
-``--data-root`` is the COCO dataset produced by the conversion/merge steps (``<root>/{train,test}/{images,annotation.json}``).
+``--data-root`` is the COCO dataset produced by the conversion/merge steps (``<root>/{train,test}/{images,annotation.json}``),
+or the SAM3 view of ``sam3-prepare`` (``<root>/prepared/sam3``): when it has a ``val`` split, in-training validation reads
+``val`` and ``test`` is only used for the final evaluation.
 """
 
 from __future__ import annotations
@@ -20,6 +22,7 @@ from omegaconf import OmegaConf
 from .config import (
     BASE_CONFIG,
     build_train_config,
+    choose_val_split,
     CONFIGS_DIR,
     ensure_merged_annotations,
     find_best_checkpoint,
@@ -162,6 +165,7 @@ def main(argv=None) -> int:
             grad_accum=a.grad_accum,
             accelerator=a.accelerator,
             num_gpus=a.num_gpus,
+            val_split=choose_val_split(a.data_root),
         )
         exp.mkdir(parents=True, exist_ok=True)
         OmegaConf.save(cfg, exp / "config_used.yaml")
