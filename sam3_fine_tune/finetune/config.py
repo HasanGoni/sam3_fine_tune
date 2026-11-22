@@ -55,7 +55,7 @@ def build_train_config(
     for split in (
         "train",
         "val",
-    ):  # a GPU-memory lever, see CLAUDE.md "Training config gotchas"
+    ):  # a GPU-memory lever, see docs/training-guide.md "Training config gotchas"
         _set(
             cfg,
             f"trainer.data.{split}.dataset.coco_json_loader.category_chunk_size",

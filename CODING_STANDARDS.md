@@ -29,7 +29,7 @@ judgement calls. Use the terms in `GLOSSARY.md`.
 
 - `sam3/` is vendored. Prefer wrappers in `sam3_fine_tune/`; when `sam3/` must change, keep the diff small and update the
   reference copy under `sam3_fine_tune/modified_script/` if the file has one.
-- `scratch.resolution` stays 1008; `category_chunk_size` is a memory lever (see `CLAUDE.md`); do not edit
+- `scratch.resolution` stays 1008; `category_chunk_size` is a memory lever (see `docs/training-guide.md`); do not edit
   `decoder_train_config.yaml`.
 - Output files overwrite by name; never delete or rewrite user data in an output folder implicitly.
 

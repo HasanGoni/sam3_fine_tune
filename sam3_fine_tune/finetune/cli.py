@@ -112,7 +112,7 @@ def parse_args(argv=None) -> argparse.Namespace:
     p.add_argument(
         "--category-chunk-size",
         type=int,
-        help="GPU-memory lever; see CLAUDE.md before raising it",
+        help="GPU-memory lever; see docs/training-guide.md before raising it",
     )
     p.add_argument(
         "--grad-accum",
