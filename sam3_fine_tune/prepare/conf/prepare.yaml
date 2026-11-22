@@ -1,0 +1,18 @@
+# Prepare a COCO dataset root for SAM3 (and UNVEIL). Override anything from the CLI:
+#   sam3-prepare root=/path/to/dataset [val_fraction=0.1] [on_conflict=test] [dry_run=true]
+defaults:
+  - _self_
+  - override hydra/job_logging: none
+  - override hydra/hydra_logging: none
+
+mode: prepare            # prepare (ingest of mask folders is a separate step)
+root: ???                # dataset root <root>/{train,test}/{images,annotation.json}; output goes to <root>/prepared/
+val_fraction: 0.1        # share of the non-test images that becomes `val` (seeded, by physical image)
+seed: 0                  # makes the val selection reproducible
+on_conflict: error       # a picture in both train and test: error (stop with a list) | test (keep it in test)
+dry_run: false           # print the report without writing anything
+
+hydra:
+  run:
+    dir: .               # do not create outputs/<date>/ directories
+  output_subdir: null

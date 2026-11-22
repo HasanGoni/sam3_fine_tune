@@ -10,7 +10,7 @@ repos:
         additional_dependencies: [ufmt==2.9.1, ruff-api==0.1.0, black==24.2.0, usort==1.0.2]
         entry: ufmt format
         types: [python]
-        files: ^(tests/|sam3_fine_tune/(dataset|finetune|sambaunet|inference)/(?!decoder_inference\.py))
+        files: ^(tests/|sam3_fine_tune/(dataset|finetune|sambaunet|inference|prepare)/(?!decoder_inference\.py))
       - id: repo-standards
         name: mechanical repo rules
         language: system
@@ -22,4 +22,4 @@ repos:
         language: python
         additional_dependencies: [mypy==1.13.0, numpy, omegaconf, hydra-core, types-Pillow]
         entry: mypy  # flags live in [tool.mypy] in pyproject.toml
-        files: ^sam3_fine_tune/inference/(run|cli|score)\.py$
+        files: ^sam3_fine_tune/(inference/(run|cli|score)|prepare/(ops|cli))\.py$
