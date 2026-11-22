@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 import shutil
+from collections.abc import Iterable
 from pathlib import Path, PurePosixPath
 
 SPLITS = ("train", "test")
@@ -137,6 +138,40 @@ def _union(img: dict) -> tuple[list[dict], list[str]]:
     return merged, problems
 
 
+def _similar_names(names: Iterable[str]) -> list[list[str]]:
+    """Groups of declared names that differ only in case or whitespace: probably one category typed two ways."""
+    groups: dict[str, list[str]] = {}
+    for n in sorted(names):
+        groups.setdefault("".join(n.split()).casefold(), []).append(n)
+    return [g for g in groups.values() if len(g) > 1]
+
+
+def _previous(root: Path) -> dict:
+    """The manifest of an earlier run, checked (empty when there is none): what is frozen."""
+    f = root / PREPARED / "manifest.json"
+    if not f.is_file():
+        for leftover in (f"{PREPARED}.old", f"{PREPARED}.tmp"):
+            if (root / leftover).exists() and leftover.endswith(".old"):
+                raise ValueError(
+                    f"{root / leftover} exists but {root / PREPARED} does not: an earlier run was interrupted. "
+                    f"Rename it back to '{PREPARED}' (keeps the frozen split) or delete it (re-splits everything)"
+                )
+        return {"images": {}, "categories": {}}
+    try:
+        data = json.loads(f.read_text())
+        if data["version"] != 1:
+            raise ValueError(f"unsupported manifest version {data['version']}")
+        for rec in data["images"].values():
+            if rec["split"] not in VIEW_SPLITS or not isinstance(rec["id"], int):
+                raise ValueError(f"bad image record {rec}")
+        if not all(isinstance(i, int) for i in data["categories"].values()):
+            raise ValueError("bad category ids")
+    except (ValueError, KeyError, TypeError, AttributeError) as e:
+        raise ValueError(f"{f} is unreadable ({e!r}); fix or delete it") from e
+    assert isinstance(data, dict)
+    return data
+
+
 def _source(img: dict, split: str) -> tuple[dict, Path]:
     """The entry and file to show in `split`: the one from that source split, else the picture's train entry
     (val is carved from train, so it has no source split of its own)."""
@@ -156,7 +191,7 @@ def prepare_dataset(
     """Prepare ``root`` and return the report. ``report["problems"]`` is empty on success; when it is not, nothing was
     written and only ``problems`` is meaningful. ``dry_run`` computes the same report without writing.
 
-    on_conflict: a picture found in both train and test is a problem (``error``) or stays in test (``test``).
+    on_conflict: a picture found in both train and test is a problem (``error``) or stays in test (``test``; this also moves a picture an earlier run had put in train or val).
     val_fraction: share of the train pictures that becomes val, in [0, 1).
     """
     if on_conflict not in ("error", "test"):
@@ -164,9 +199,13 @@ def prepare_dataset(
     if not 0 <= val_fraction < 1:
         raise ValueError(f"val_fraction must be in [0, 1), got {val_fraction}")
     root = Path(root)
+    previous = _previous(
+        root
+    )  # first: a bad manifest should not cost a full hashing pass
     records, found = _scan(root)
     images = _merge(records)
     problems: list[str] = list(found["problems"])
+    frozen = previous["images"]
     assigned: dict[str, str] = {}
     for img in images.values():
         img["annotations"], conflicts = _union(img)
@@ -178,6 +217,13 @@ def prepare_dataset(
                     "one picture is in both train and test: " + ", ".join(img["files"])
                 )
             assigned[h] = "test"
+        elif h in frozen:  # an earlier run placed it: it never moves
+            assigned[h] = frozen[h]["split"]
+            if (assigned[h] == "test") != (next(iter(img["splits"])) == "test"):
+                problems.append(
+                    f"a picture moved between train and test since the last run: {', '.join(img['files'])} "
+                    f"(it was {assigned[h]}); delete {root / PREPARED} to split again"
+                )
         else:
             assigned[h] = next(iter(img["splits"]))
     if problems:
@@ -188,21 +234,38 @@ def prepare_dataset(
         if not images[h]["annotations"]:
             dropped[assigned.pop(h)] += 1
     images = {h: img for h, img in images.items() if h in assigned}
+    # only pictures no earlier run placed can become val
     train = sorted(
-        (h for h, s in assigned.items() if s == "train"),
+        (h for h, s in assigned.items() if s == "train" and h not in frozen),
         key=lambda h: hashlib.sha256(f"{seed}:{h}".encode()).hexdigest(),
     )
-    n_val = round(val_fraction * len(train))
-    if val_fraction > 0 and len(train) > 1:
-        n_val = max(1, n_val)
-    n_val = min(n_val, max(len(train) - 1, 0))  # train never ends up empty
+    kept_train = sum(1 for h, s in assigned.items() if s == "train" and h in frozen)
+    kept_val = sum(1 for h, s in assigned.items() if s == "val")
+    total = kept_train + kept_val + len(train)
+    target = round(val_fraction * total)
+    if val_fraction > 0 and total > 1:
+        target = max(1, target)
+    # val's share is that of the whole non-test set, not of this batch; train never ends up empty
+    n_val = max(0, min(target - kept_val, len(train), kept_train + len(train) - 1))
     for h in train[:n_val]:
         assigned[h] = "val"
 
     # every category the source declares, even one with no kept annotation (SAM3 queries all of them); ids by
     # name, so they do not depend on which pictures are present
-    categories = {n: i for i, n in enumerate(sorted(found["categories"]), 1)}
-    ids = {h: i for i, h in enumerate(sorted(images), 1)}
+    # and by the earlier run: a category or picture keeps its id, new ones follow
+    categories = {
+        n: i for n, i in previous["categories"].items() if n in found["categories"]
+    }
+    top = max(previous["categories"].values(), default=0)
+    for n in sorted(found["categories"] - categories.keys()):
+        top += 1
+        categories[n] = top
+    ids = {h: frozen[h]["id"] for h in sorted(images) if h in frozen}
+    top = max((r["id"] for r in frozen.values()), default=0)
+    for h in sorted(images):
+        if h not in ids:
+            top += 1
+            ids[h] = top
     views: dict[str, dict] = {
         s: {
             "images": [],
@@ -212,7 +275,7 @@ def prepare_dataset(
         for s in VIEW_SPLITS
     }
     sources: dict[str, list[tuple[str, Path]]] = {s: [] for s in VIEW_SPLITS}
-    for h in sorted(images):
+    for h in sorted(images, key=ids.__getitem__):
         img, split = images[h], assigned[h]
         view = views[split]
         entry, src = _source(img, split)
@@ -239,7 +302,7 @@ def prepare_dataset(
                 "file_name": _source(images[h], assigned[h])[0]["file_name"],
                 "files": images[h]["files"],
             }
-            for h in sorted(images)
+            for h in sorted(images, key=ids.__getitem__)
         },
     }
     if not dry_run:
@@ -252,6 +315,7 @@ def prepare_dataset(
         "missing_images": found["missing"],
         "splits_without_annotations": found["no_annotations"],
         "categories": categories,
+        "similar_category_names": _similar_names(categories),
     }
 
 

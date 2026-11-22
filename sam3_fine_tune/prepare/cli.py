@@ -64,6 +64,11 @@ def _prepare(cfg: DictConfig) -> None:
             f"first: {report['missing_images'][0]}",
             file=sys.stderr,
         )
+    for group in report["similar_category_names"]:
+        print(
+            f"warning: similar category names, probably one category: {group}",
+            file=sys.stderr,
+        )
     if report["images"]["val"] == 0:
         print("warning: the val split is empty", file=sys.stderr)
 
