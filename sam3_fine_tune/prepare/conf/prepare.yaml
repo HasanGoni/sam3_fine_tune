@@ -1,15 +1,20 @@
-# Prepare a COCO dataset root for SAM3 (and UNVEIL). Override anything from the CLI:
-#   sam3-prepare root=/path/to/dataset [val_fraction=0.1] [on_conflict=test] [dry_run=true]
+# Two modes. Override anything from the CLI:
+#   sam3-prepare root=/path/to/dataset [val_fraction=0.1] [on_conflict=test] [dry_run=true]      (mode=prepare)
+#   sam3-prepare mode=ingest images=DIR +masks.chip=DIR +masks.substrate=DIR into=ROOT          (one +masks.<category> each)
 defaults:
   - _self_
   - override hydra/job_logging: none
   - override hydra/hydra_logging: none
 
-mode: prepare            # prepare (ingest of mask folders is a separate step)
+mode: prepare            # prepare: derive the SAM3 view from a COCO root | ingest: images + mask folders -> COCO root
 root: ???                # dataset root <root>/{train,test}/{images,annotation.json}; output goes to <root>/prepared/
 val_fraction: 0.1        # share of the non-test images that becomes `val` (seeded, by physical image)
 seed: 0                  # makes the val selection reproducible
 on_conflict: error       # a picture in both train and test: error (stop with a list) | test (keep it in test)
+images: null             # ingest: folder of images
+masks: {}                # ingest: {category: folder of binary masks}, matched to images by file stem; set with +masks.<category>=DIR
+into: null               # ingest: dataset root <into>/{train,test}/{images,annotation.json}; created or extended
+test_fraction: 0.2       # ingest: share of the NEW pictures that goes to test (existing pictures never move)
 dry_run: false           # print the report without writing anything
 
 hydra:
