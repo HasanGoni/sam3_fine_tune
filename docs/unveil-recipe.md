@@ -26,9 +26,21 @@ joint pair or custom calibration sets; those need code changes in our fork of th
    memory budget, so GPU memory does not grow with N. N = 12 gives 2 per stream, the paper's value.
 3. **Loss kind is declared per category** in the recipe file (`kind: region | balanced`). There is no built-in guess.
    `region` = BCE + IoU. `balanced` = class-balanced BCE (+ IoU), for thin structures where background dominates.
-4. **Negatives must be verified.** A category may take presence-0 images only from sources where it was exhaustively
-   annotated. An image that merely has no annotation for it may hold an unlabeled defect, which teaches the presence
-   decoder wrong answers. Each source in the merged dataset therefore lists the categories it annotates.
+4. **Negatives come from other families, never from the same family.** Categories are grouped into families in the
+   recipe file (`families:`). An image annotated in one family is a verified negative (presence 0) for every
+   category of the *other* families. Same-family images are never negatives: thick/thin HD wires always co-occur, and
+   chip-family labels are probably incomplete (see below). Unannotated images are not negatives until someone
+   confirms they are clean (`clean_sources:`). Why: an image with no label for X may hold an unlabeled X, which
+   teaches the presence decoder that a visible X is absent.
+   Evidence from the labels of the 12-category set (train, 12,435 images): 62 of 66 category pairs never share an
+   image; only gray_void/lifted_chip/matrix_substrate with matrix_chip, and thick/thin HD wires, do. Every
+   matrix_chip image has exactly one companion label (1428 void + 938 lifted + 198 substrate = 2564 chip images), which
+   looks like how the set was assembled, so a lifted_chip image may contain an unlabeled void or substrate. Proposed
+   families: pins {et_pin, eberhard_pin, wuxi_pin}, crack {war_crack}, HD wires {thick_wire_HD, thin_wire_HD}, panda
+   wires {thick_wire_panda, thin_wire_panda}, chip {matrix_chip, matrix_substrate, gray_void, lifted_chip}.
+   Not yet verified by eye: the 12-image contact sheets per family and for the unannotated `f`/`g` images and the
+   `a`/`c`/`e` pin-source images with no pin (3,017 unannotated images in total) are still to be reviewed. Until
+   then they are not negatives.
 5. **Steps scale with the data.** `iterations = epochs x train_images / images_per_step`. The paper's 11,000 x 24 is
    about 264k samples. Keep the optimizer settings: lr 8e-5 (heads), 2.5e-4 (LoRA r16, alpha 32, ViT blocks 24-31),
    clip 0.1, warmup 300 then cosine.
@@ -47,7 +59,11 @@ data_root: /path/to/dataset            # train/{images,annotation_merged.json}
 categories:
   matrix_chip:      {kind: region}
   thin_wire_panda:  {kind: balanced}
-  eberhard_pin:     {kind: region, negatives_from: [source_a]}   # rule 4
+  eberhard_pin:     {kind: region}
+families:                              # rule 4: negatives only across families
+  pins: [et_pin, eberhard_pin, wuxi_pin]
+  chip: [matrix_chip, matrix_substrate, gray_void, lifted_chip]
+clean_sources: []                      # unannotated sources confirmed clean, usable as negatives for all categories
 joint: [thin_wire_HD, thick_wire_HD]   # optional
 replay: false
 epochs: 10                             # rule 5 derives iterations
@@ -55,7 +71,7 @@ epochs: 10                             # rule 5 derives iterations
 
 ## Open questions
 
-- Which sources annotate which categories (rule 4)? This decides how many verified negatives each category gets.
+- What are the unannotated `f`/`g` images (rule 4)? Clean (then list in `clean_sources`) or unlabeled defects (then never negatives)? Do the chip-family images hide unlabeled voids or substrates?
 - Does the `balanced` loss need a different weight than the paper's HED/RCF form for wires 2-5 px wide?
 - Real step time and peak memory on the GB10 (measure with a few hundred steps before choosing `epochs`).
 - Licence: SAM License and the non-commercial terms of UNVEIL's training sets, before any Acme use.
