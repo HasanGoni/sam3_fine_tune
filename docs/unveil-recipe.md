@@ -26,21 +26,26 @@ joint pair or custom calibration sets; those need code changes in our fork of th
    memory budget, so GPU memory does not grow with N. N = 12 gives 2 per stream, the paper's value.
 3. **Loss kind is declared per category** in the recipe file (`kind: region | balanced`). There is no built-in guess.
    `region` = BCE + IoU. `balanced` = class-balanced BCE (+ IoU), for thin structures where background dominates.
-4. **Negatives come from other families, never from the same family.** Categories are grouped into families in the
-   recipe file (`families:`). An image annotated in one family is a verified negative (presence 0) for every
+4. **Images without annotations are excluded from training.** An image that has no mask for any category is dropped
+   completely: it is neither a positive nor a negative. Why: an empty label does not mean "absent". In the 12-category
+   set the unannotated images (train 3,017 of 12,435) were checked by eye (contact sheets, 2026-11-22): `f` (1008)
+   shows matrix_chip and `g` (1164) shows thin_wire_HD, both unlabeled; the unannotated images of the pin sources
+   `a`/`c`/`e` look like pins but are not the target pin type. Using any of them as presence-0 images would teach the
+   presence decoder wrong answers, and the risk is not worth the extra images, so none is used. Nothing is deleted
+   from the dataset: the exclusion is made when the training index is built, and the number dropped is printed.
+   **Negatives for presence come only from annotated images of other families.** Categories are grouped into families
+   in the recipe file (`families:`). An image annotated in one family is a verified negative (presence 0) for every
    category of the *other* families. Same-family images are never negatives: thick/thin HD wires always co-occur, and
-   chip-family labels are probably incomplete (see below). Unannotated images are not negatives until someone
-   confirms they are clean (`clean_sources:`). Why: an image with no label for X may hold an unlabeled X, which
-   teaches the presence decoder that a visible X is absent.
-   Evidence from the labels of the 12-category set (train, 12,435 images): 62 of 66 category pairs never share an
-   image; only gray_void/lifted_chip/matrix_substrate with matrix_chip, and thick/thin HD wires, do. Every
-   matrix_chip image has exactly one companion label (1428 void + 938 lifted + 198 substrate = 2564 chip images), which
-   looks like how the set was assembled, so a lifted_chip image may contain an unlabeled void or substrate. Proposed
-   families: pins {et_pin, eberhard_pin, wuxi_pin}, crack {war_crack}, HD wires {thick_wire_HD, thin_wire_HD}, panda
-   wires {thick_wire_panda, thin_wire_panda}, chip {matrix_chip, matrix_substrate, gray_void, lifted_chip}.
-   Not yet verified by eye: the 12-image contact sheets per family and for the unannotated `f`/`g` images and the
-   `a`/`c`/`e` pin-source images with no pin (3,017 unannotated images in total) are still to be reviewed. Until
-   then they are not negatives.
+   chip-family labels are probably incomplete.
+   Evidence from the labels (train, 12,435 images): 62 of 66 category pairs never share an image; only
+   gray_void/lifted_chip/matrix_substrate with matrix_chip, and thick/thin HD wires, do. Every matrix_chip image has
+   exactly one companion label (1428 void + 938 lifted + 198 substrate = 2564 chip images), which looks like how the
+   set was assembled. Proposed families: pins {et_pin, eberhard_pin, wuxi_pin}, crack {war_crack}, HD wires
+   {thick_wire_HD, thin_wire_HD}, panda wires {thick_wire_panda, thin_wire_panda}, chip {matrix_chip,
+   matrix_substrate, gray_void, lifted_chip}. Reviewed by eye (12 images per group): family exclusivity and the chip
+   family looked fine.
+   Consequences: `iterations` (rule 5) uses the image count after the exclusion. The test split has the same problem
+   (6,091 images, 1,448 unannotated, 615 of them `g`): evaluation should skip or report them separately.
 5. **Steps scale with the data.** `iterations = epochs x train_images / images_per_step`. The paper's 11,000 x 24 is
    about 264k samples. Keep the optimizer settings: lr 8e-5 (heads), 2.5e-4 (LoRA r16, alpha 32, ViT blocks 24-31),
    clip 0.1, warmup 300 then cosine.
@@ -63,7 +68,7 @@ categories:
 families:                              # rule 4: negatives only across families
   pins: [et_pin, eberhard_pin, wuxi_pin]
   chip: [matrix_chip, matrix_substrate, gray_void, lifted_chip]
-clean_sources: []                      # unannotated sources confirmed clean, usable as negatives for all categories
+exclude_unannotated: true             # rule 4: images without any mask are dropped (default)
 joint: [thin_wire_HD, thick_wire_HD]   # optional
 replay: false
 epochs: 10                             # rule 5 derives iterations
@@ -71,7 +76,7 @@ epochs: 10                             # rule 5 derives iterations
 
 ## Open questions
 
-- What are the unannotated `f`/`g` images (rule 4)? Clean (then list in `clean_sources`) or unlabeled defects (then never negatives)? Do the chip-family images hide unlabeled voids or substrates?
+- Annotate the dropped `f` (chips) and `g` (thin HD wires) images later? They would add about 2,170 training images.
 - Does the `balanced` loss need a different weight than the paper's HED/RCF form for wires 2-5 px wide?
 - Real step time and peak memory on the GB10 (measure with a few hundred steps before choosing `epochs`).
 - Licence: SAM License and the non-commercial terms of UNVEIL's training sets, before any Acme use.
