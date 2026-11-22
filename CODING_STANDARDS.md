@@ -18,6 +18,13 @@ judgement calls. Use the terms in `GLOSSARY.md`.
 - Validate user input before loading a model. Errors name the offending key and what to change; the CLI turns them into
   one `SystemExit` line, not a traceback.
 
+## Data files are untrusted input
+
+- A path read from a data file (a COCO `file_name`, a mask path in an index) is rejected when it is absolute or contains
+  `..`, before it is joined to a folder, and nothing is written outside the output folder.
+- A tool that reads data files reports malformed input (a missing key, an unknown category id) as a list of problems
+  that names the file and the entry, not as a raw `KeyError` traceback.
+
 ## Don't change training behaviour by accident
 
 - `sam3/` is vendored. Prefer wrappers in `sam3_fine_tune/`; when `sam3/` must change, keep the diff small and update the
