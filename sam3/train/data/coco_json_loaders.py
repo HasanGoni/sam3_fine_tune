@@ -144,9 +144,21 @@ class COCO_FROM_JSON:
                 self._sorted_cat_ids
             ), "Number of prompts must match number of categories"
 
+    def _datapoints(self):
+        """(image index, chunk index) of every datapoint that has at least one query: a chunk whose categories an
+        image is all "not annotated" for is left out, so no datapoint is empty."""
+        if not hasattr(self, "_dp"):
+            self._dp = [
+                (i, j)
+                for i, item in enumerate(self._raw_data)
+                for j, chunk in enumerate(self.category_chunks)
+                if set(chunk) - set(item["image"].get("not_annotated_category_ids", []))
+            ]
+        return self._dp
+
     def getDatapointIds(self):
         """Return all datapoint indices for training."""
-        return list(range(len(self._raw_data) * len(self.category_chunks)))
+        return list(range(len(self._datapoints())))
 
     def loadQueriesAndAnnotationsFromDatapoint(self, idx):
         """
@@ -158,8 +170,7 @@ class COCO_FROM_JSON:
         Returns:
             Tuple of (queries, annotations) lists
         """
-        img_idx = idx // len(self.category_chunks)
-        chunk_idx = idx % len(self.category_chunks)
+        img_idx, chunk_idx = self._datapoints()[idx]
         cat_chunk = self.category_chunks[chunk_idx]
 
         queries = []
@@ -199,8 +210,13 @@ class COCO_FROM_JSON:
         for ann in raw_annotations:
             cat_id_to_anns[ann["category_id"]].append(ann)
 
+        # categories this image is not annotated for (sam3-prepare writes them): no query, so they are
+        # neither positives nor hard negatives
+        skip = set(image_info.get("not_annotated_category_ids", []))
         annotations_by_cat_sorted = [
-            (cat_id, cat_id_to_anns[cat_id]) for cat_id in cat_chunk
+            (cat_id, cat_id_to_anns[cat_id])
+            for cat_id in cat_chunk
+            if cat_id not in skip
         ]
 
         for cat_id, anns in annotations_by_cat_sorted:
@@ -260,7 +276,7 @@ class COCO_FROM_JSON:
         Returns:
             List containing image info dict
         """
-        img_idx = idx // len(self.category_chunks)
+        img_idx = self._datapoints()[idx][0]
         img_data = self._raw_data[img_idx]["image"]
         images = [
             {

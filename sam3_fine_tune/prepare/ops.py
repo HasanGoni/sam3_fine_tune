@@ -16,6 +16,8 @@ import shutil
 from collections.abc import Iterable
 from pathlib import Path, PurePosixPath
 
+import yaml
+
 from .unveil_view import PREPARED, write_unveil_view
 
 SPLITS = ("train", "test")
@@ -178,6 +180,24 @@ def _previous(root: Path) -> dict:
     return data
 
 
+def _families(root: Path, declared: set[str]) -> tuple[dict[str, list[str]], list[str]]:
+    """``families:`` of the recipe an earlier run wrote (empty when there is none or it lists none), and problems."""
+    recipe = root / PREPARED / "unveil" / "recipe.yaml"
+    if not recipe.is_file():
+        return {}, []
+    try:
+        raw = yaml.safe_load(recipe.read_text()).get("families") or {}
+        if not all(isinstance(v, list) for v in raw.values()):
+            return {}, [f"{recipe}: every family must be a list of category names"]
+        families = {str(k): [str(c) for c in v] for k, v in raw.items()}
+    except (yaml.YAMLError, AttributeError, TypeError) as e:
+        return {}, [f"{recipe}: cannot read `families` ({e!r})"]
+    unknown = sorted({c for v in families.values() for c in v} - declared)
+    if unknown:
+        return {}, [f"{recipe}: families name unknown categories {unknown}"]
+    return families, []
+
+
 def _source(img: dict, split: str) -> tuple[dict, Path]:
     """The entry and file to show in `split`: the one from that source split, else the picture's train entry
     (val is carved from train, so it has no source split of its own)."""
@@ -232,6 +252,8 @@ def prepare_dataset(
                 )
         else:
             assigned[h] = next(iter(img["splits"]))
+    families, family_problems = _families(root, found["categories"])
+    problems.extend(family_problems)
     if problems:
         return {"problems": problems}
 
@@ -281,11 +303,21 @@ def prepare_dataset(
         for s in VIEW_SPLITS
     }
     sources: dict[str, list[tuple[str, Path]]] = {s: [] for s in VIEW_SPLITS}
+    family_sets = [set(m) for m in families.values()]
+    n_flagged = 0
     for h in sorted(images, key=ids.__getitem__):
         img, split = images[h], assigned[h]
         view = views[split]
         entry, src = _source(img, split)
-        view["images"].append({**entry, "id": ids[h]})
+        annotated = {a["category"] for a in img["annotations"]}
+        same_family = set().union(*(f for f in family_sets if f & annotated))
+        flagged = sorted(categories[c] for c in same_family - annotated)
+        n_flagged += bool(flagged)
+        view["images"].append(
+            {k: v for k, v in entry.items() if k != "not_annotated_category_ids"}
+            | {"id": ids[h]}
+            | ({"not_annotated_category_ids": flagged} if flagged else {})
+        )
         sources[split].append((entry["file_name"], src))
         for a in img["annotations"]:
             view["annotations"].append(
@@ -301,6 +333,7 @@ def prepare_dataset(
         "seed": seed,
         "val_fraction": val_fraction,
         "categories": categories,
+        "families": families,  # the recipe's families this view was built with
         "images": {
             h: {
                 "split": assigned[h],
@@ -321,6 +354,7 @@ def prepare_dataset(
         "splits_without_annotations": found["no_annotations"],
         "categories": categories,
         "recipe_missing_categories": gaps,
+        "images_with_not_annotated_flags": n_flagged,
         "similar_category_names": _similar_names(categories),
     }
 

@@ -44,6 +44,7 @@ joint pair or custom calibration sets; those need code changes in our fork of th
    {thick_wire_HD, thin_wire_HD}, panda wires {thick_wire_panda, thin_wire_panda}, chip {matrix_chip,
    matrix_substrate, gray_void, lifted_chip}. Reviewed by eye (12 images per group): family exclusivity and the chip
    family looked fine.
+   `sam3-prepare` applies the same families to the SAM3 view (`not_annotated_category_ids`, so SAM3 makes no query for them). It reads `families:` from the recipe of the previous run, so edit `recipe.yaml`, then run `sam3-prepare` again; the report shows `images_with_not_annotated_flags`.
    Consequences: `iterations` (rule 5) uses the image count after the exclusion. The test split has the same problem
    (6,091 images, 1,448 unannotated, 615 of them `g`): evaluation should skip or report them separately.
 5. **Steps scale with the data.** `iterations = epochs x train_images / images_per_step`. The paper's 11,000 x 24 is

@@ -53,7 +53,8 @@ def _mask(annotations: list[dict], width: int, height: int) -> np.ndarray:
 def _skeleton(names: list[str]) -> str:
     lines = [
         "# Fill in `kind` for every category: region (BCE + IoU) or balanced (class-balanced BCE, for thin structures).",
-        "# families: group categories; presence negatives come only from annotated images of other families.",
+        "# families: group categories. UNVEIL takes presence negatives only from images of other families, and sam3-prepare",
+        "# makes no SAM3 query for a same-family category an image is not annotated for. Run sam3-prepare again after editing.",
         "# Rules: docs/unveil-recipe.md. This file is never overwritten by sam3-prepare.",
         "categories:",
         *[f"  {json.dumps(n)}:\n    kind: ???" for n in names],
