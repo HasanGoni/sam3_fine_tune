@@ -29,6 +29,14 @@ The **best checkpoint** is the one with the highest validation segmentation AP.
 **Dataset root**: `<root>/{train,test}/{images,annotation.json}`, COCO polygons. The **merged annotation**
 (`annotation_merged.json`, a copy of `annotation.json` when none exists) is what the training configs read.
 
+**Physical image**: one picture, identified by the sha256 of its file bytes. A COCO root can hold several entries for it (for example one per category, under different file names); `sam3-prepare` merges them into one image with all its categories.
+
+**Manifest**: `<root>/prepared/manifest.json`, the frozen assignment of each physical image to `train`, `val` or `test`, plus its image id and each category's id. Re-runs never change an earlier entry.
+
+**View**: a derived copy of the dataset in one model's format, written under `<root>/prepared/` (`sam3/` for `sam3-finetune`, `unveil/` for UNVEIL). Views are regenerated from the COCO root and the manifest, never edited by hand.
+
+**Val split**: pictures neither model trains on; SAM3 validates on it during training and UNVEIL fits its thresholds on it. `test` is kept for the final comparison.
+
 **Extend vs new**: adding images of a category to a dataset where it already exists, versus creating the category.
 
 **Test split**: the held-out images used by `sam3-finetune` evaluation; a share of each added category goes there.
@@ -49,5 +57,5 @@ results compare key-by-key with SAM3.
 **HPC**: the Acme cluster reached with `ssh hpc_muc`, where training and evaluation run and the git remote lives; this
 workspace is a staging copy. **Runbook skills**: the `.github/skills/*/SKILL.md` files describing HPC procedures.
 
-**Console scripts**: `sam3-dataset` (build or extend a dataset), `sam3-finetune` (train then evaluate), `sam3-infer`
+**Console scripts**: `sam3-dataset` (build or extend a dataset), `sam3-prepare` (one COCO root to the SAM3 and UNVEIL views with a shared frozen split), `sam3-finetune` (train then evaluate), `sam3-infer`
 (run base or fine-tuned SAM3 with one or several text prompts, each with one threshold or a sweep of thresholds, over a folder or a COCO split; with a COCO split it scores the predictions, and a checkpoint list compares models, `null` = base).

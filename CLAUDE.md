@@ -97,6 +97,10 @@ earlier.
 `pyproject.toml`; `uv pip install -e . --no-deps` or `uv sync` installs the script) converts masks to COCO,
 splits train/test and creates / extends a category locally. See README "Shortcut: build or extend a dataset".
 
+`sam3-prepare` (`sam3_fine_tune/prepare/`, same Hydra layout) derives the SAM3 and UNVEIL views of one COCO root with a frozen
+train/val/test split by picture. Before preparing or extending a dataset for both models, read
+`.github/skills/prepare-data/SKILL.md`.
+
 ## Training
 
 Before editing a training config or `category_chunk_size`, launching training (HPC `bsub` or CPU-only), or debugging a
