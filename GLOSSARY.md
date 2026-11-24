@@ -60,8 +60,8 @@ workspace is a staging copy. **Runbook skills**: the `.github/skills/*/SKILL.md`
 **Console scripts**: `sam3-dataset` (build or extend a dataset), `sam3-prepare` (one COCO root to the SAM3 and UNVEIL views with a shared frozen split), `sam3-finetune` (train then evaluate), `sam3-compare` (score models on the prepared test split), `sam3-infer`
 (run base or fine-tuned SAM3 with one or several text prompts, each with one threshold or a sweep of thresholds, over a folder or a COCO split; with a COCO split it scores the predictions, and a checkpoint list compares models, `null` = base), `sam3-infer-unveil` (the same for UNVEIL: a concept map per prompt, cut at `threshold` or at the checkpoint's per-category binarize).
 
-**Model entry**: one column of a comparison, `{name, kind, ...}`: a kind (`sam3-base`, `sam3-finetuned` with a checkpoint, `predictions` = a saved `sam3-infer` output), a checkpoint where it applies. Entries are independent, so adding a column changes no other.
+**Gate**: a presence check that decides per image whether a category is present before its segmentation is kept. With the gate off you see the raw concept map. Every table says which gate setting each column used, so gated and ungated numbers are never mixed.
+
+**Model entry**: one column of a comparison, `{name, kind, ...}`: a kind (`sam3-base`, `sam3-finetuned` with a checkpoint, `predictions` = a saved `sam3-infer` output, and for UNVEIL `unveil`, `unveil-sam3-path`), a checkpoint where it applies, and for UNVEIL a `gate` flag. Entries are independent, so adding a column changes no other.
 
 **Compare**: `sam3-compare` scores a list of model entries on the prepared `test` split with one metric, the **pooled union-mask IoU** per category at threshold 0.5: intersection and union pixels summed over the images annotated for the category, one mask per image (the union of the instances above the threshold). Images flagged `not_annotated` for a category are skipped; a category with no scored image is shown as `n/a`, not 0. It prints one table with the image count per category.
-
-**Gate**: a presence check that decides per image whether a category is present before its segmentation is kept. With the gate off you see the raw concept map. Every table says which gate setting each column used, so gated and ungated numbers are never mixed.

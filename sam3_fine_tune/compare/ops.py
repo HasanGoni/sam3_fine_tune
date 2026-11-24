@@ -18,7 +18,10 @@ from typing import Any, Callable
 import numpy as np
 from PIL import Image
 
-KINDS = ("sam3-base", "sam3-finetuned", "predictions")
+from sam3_fine_tune.train_unveil.checkpoint import cutoffs as checkpoint_cutoffs
+
+UNVEIL_KINDS = ("unveil", "unveil-sam3-path")
+KINDS = ("sam3-base", "sam3-finetuned", "predictions", *UNVEIL_KINDS)
 SPLIT = Path("prepared") / "sam3" / "test"
 ANNOTATION = "annotation_merged.json"
 
@@ -47,7 +50,11 @@ def flag_for(
     trained = entry.get("trained_categories")
     if trained is not None and _norm(category) not in {_norm(t) for t in trained}:
         return "not trained"
-    if iou is not None and iou < below and entry["kind"] != "sam3-base":
+    if (
+        iou is not None
+        and iou < below
+        and entry["kind"] not in ("sam3-base", "unveil-sam3-path")
+    ):
         return "suspect"
     return None
 
@@ -145,6 +152,80 @@ def model_source(
             last["masks"][category] = union
         found: np.ndarray = last["masks"][category]
         return found
+
+    return source
+
+
+def gate_setting(entry: dict[str, Any]) -> str | None:
+    """The presence-gate setting of an UNVEIL column (``on``/``off``, ``none`` for the SAM3 path); else ``None``."""
+    if entry["kind"] == "unveil-sam3-path":
+        return "none"
+    if entry["kind"] == "unveil":
+        return "off" if entry.get("gate", True) is False else "on"
+    return None
+
+
+def unveil_source(
+    entry: dict[str, Any],
+    categories: list[str],
+    threshold: float,
+    sam3_checkpoint: Any,
+    bpe_path: Any,
+    loaded: dict[Any, Any],
+    device: str = "auto",
+    cutoffs_out: dict[str, dict] | None = None,
+) -> MaskSource:
+    """UNVEIL (or its frozen SAM3 semantic path) through ``sam3-infer-unveil``'s predictor: the concept map of each
+    category above its cut-off, cached for one image. The cut-off is the checkpoint's per-category ``binarize`` when
+    it has one, else ``threshold``; ``cutoffs_out`` receives what was used per category. The presence gate thresholds
+    are applied by UNVEIL's own ``predict`` (``gate``). Imports are lazy; a loaded model is shared by entries with
+    the same checkpoint (a gated and an ungated column)."""
+    import torch
+    from omegaconf import OmegaConf
+
+    from sam3_fine_tune.infer_unveil import cli as infer_unveil
+    from sam3_fine_tune.inference.run import PromptSpec, resolve_device
+
+    if not sam3_checkpoint or not bpe_path:
+        raise ValueError(
+            f"model {entry['name']!r}: kind {entry['kind']} needs sam3_checkpoint=<sam3.pt> and bpe_path=<bpe .gz>"
+        )
+    checkpoint = entry.get("checkpoint")
+    if entry["kind"] == "unveil-sam3-path" and checkpoint:
+        raise ValueError(
+            f"model {entry['name']!r}: kind unveil-sam3-path runs the frozen SAM3 path and takes no checkpoint"
+        )
+    if checkpoint not in loaded:
+        loaded[checkpoint] = infer_unveil.load_unveil(
+            OmegaConf.create(
+                {
+                    "sam3_checkpoint": str(sam3_checkpoint),
+                    "bpe_path": str(bpe_path),
+                    "checkpoint": checkpoint,
+                    "device": resolve_device(device, torch.cuda.is_available()),
+                }
+            )
+        )
+    trained = entry.get("trained_categories")
+    texts = {c: prompt_for(c, trained) for c in categories}
+    cut = checkpoint_cutoffs(list(texts.values()), checkpoint, threshold)
+    spec_of = {c: PromptSpec(texts[c], (cut[texts[c]]["value"],)) for c in categories}
+    if cutoffs_out is not None:
+        cutoffs_out.update({c: cut[texts[c]] for c in categories})
+    specs = list(spec_of.values())
+    predictor = infer_unveil.make_predictor(
+        loaded[checkpoint],
+        specs,
+        gate_setting(entry) == "on",
+        "sam3" if entry["kind"] == "unveil-sam3-path" else "unveil",
+    )
+    last: dict[str, Any] = {}
+
+    def source(image: Path, category: str) -> np.ndarray | None:
+        if last.get("image") != image:
+            last.update(image=image, state=predictor.encode(image), shape=_shape(image))
+        masks = predictor.segment(last["state"], spec_of[category])[0]
+        return np.asarray(masks[0], bool) if masks else np.zeros(last["shape"], bool)
 
     return source
 
@@ -253,9 +334,22 @@ def compare(
             random.Random(seed).sample(images, subset), key=lambda i: i["file_name"]
         )
     categories = [cat_names[k] for k in sorted(cat_names)]
+    unveil_models: dict[Any, Any] = {}
+    cutoffs: dict[str, dict[str, dict]] = {}
     sources: dict[str, MaskSource] = {
         m["name"]: predictions_source(m)
         if m["kind"] == "predictions"
+        else unveil_source(
+            m,
+            categories,
+            threshold,
+            sam3_checkpoint,
+            bpe_path,
+            unveil_models,
+            device,
+            cutoffs.setdefault(m["name"], {}),
+        )
+        if m["kind"] in UNVEIL_KINDS
         else model_source(
             m,
             categories,
@@ -307,6 +401,10 @@ def compare(
         "subset": None if subset is None else {"images": len(images), "seed": seed},
         "threshold": threshold,
         "suspect_below": suspect_below,
+        "cutoffs": cutoffs,
+        "settings": {
+            m["name"]: {"kind": m["kind"], "gate": gate_setting(m)} for m in models
+        },
         "models": {
             m["name"]: {
                 c: {
@@ -353,6 +451,29 @@ def format_table(result: dict[str, Any]) -> str:
     if "not trained" in flags:
         legend.append(
             "not trained: not in the model's trained_categories; not a weakness"
+        )
+    gates = {n: s["gate"] for n, s in result.get("settings", {}).items() if s["gate"]}
+    if gates:
+        rows.insert(
+            2,
+            "gate".ljust(width + 8)
+            + "".join(f"  {gates.get(n, '-'):>{cw[n]}}" for n in names),
+        )
+        rows += [
+            "",
+            "UNVEIL presence gate: " + ", ".join(f"{n}={g}" for n, g in gates.items()),
+        ]
+    cut = result.get("cutoffs", {})
+    for n, per in cut.items():
+        used = {c: v["source"] for c, v in per.items() if v["source"] != "threshold"}
+        rows.append(
+            f"UNVEIL cut-off {n}: "
+            + (
+                ", ".join(f"{c} {src}" for c, src in used.items())
+                + f"; other categories threshold {result['threshold']}"
+                if used
+                else f"threshold {result['threshold']} for every category"
+            )
         )
     sub = result["subset"]
     note = (
