@@ -8,6 +8,7 @@ tests) and ``unveil`` (UNVEIL's ``TrainNet`` on SAM3 weights; ``unveil`` is impo
 
 from __future__ import annotations
 
+import json
 import math
 import resource
 import statistics
@@ -19,6 +20,8 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
+from . import checkpoint as C
+from .calibrate import calibrate
 from .ops import verified_absent
 from .streams import build_streams, read_item, StreamSampler
 
@@ -334,4 +337,73 @@ def run_trial(
         "peak_memory_gb": round(peak, 3),
         "trainable_params": n_params,
         "joint": plan["joint"],
+    }
+
+
+def steps_for(
+    plan: dict, index: dict[str, list[dict]], epochs: float, accumulate: int
+) -> int:
+    """Rule 5: epochs x distinct train images / images per optimizer step (one GPU: per_gpu x streams x accumulate)."""
+    images = len({r["id"] for rs in index.values() for r in rs})
+    per_step = sum(s.per_gpu for s in build_streams(plan)) * accumulate
+    return max(1, math.ceil(epochs * images / per_step))
+
+
+def run_training(
+    plan: dict,
+    index: dict[str, list[dict]],
+    root: str | Path,
+    out: str | Path,
+    steps: int,
+    model: str = "unveil",
+    device: str = "cpu",
+    size: int = 1008,
+    seed: int = 0,
+    accumulate: int = 1,
+) -> dict:
+    """Train for ``steps`` optimizer steps, fit the thresholds on ``val``, write ``<out>/unveil.safetensors``."""
+    _positive("steps", steps)
+    root, out = Path(root), Path(out)
+    out.mkdir(parents=True, exist_ok=True)
+    with open(out / "log.jsonl", "w") as f:
+
+        def log(rec: dict) -> None:
+            f.write(json.dumps(rec) + "\n")
+            f.flush()
+
+        net, times, n_params, peak = _run_steps(
+            plan, index, root, steps, model, device, size, seed, accumulate, True, log
+        )
+    tau, binarize, report = calibrate(net, plan, root, size, device)
+    groups, convention = net.tensor_groups()
+    meta = C.make_meta(
+        plan["categories"],
+        {
+            "single": {n: t for n, t in tau.items()},
+            "joint": {},
+            "free_text": float(np.mean(list(tau.values()))),
+            "rule": "per category: max balanced accuracy on the val split, ties -> 0.5; verified-absent val images "
+            "come from other families only",
+        },
+        binarize,
+        {
+            "steps": steps,
+            "kinds": plan["kinds"],
+            "custom_joint_pair": plan["joint"],
+            "trained_with": model,
+        },
+    )
+    path = out / "unveil.safetensors"
+    digest = C.save_checkpoint(path, C.assemble(groups, convention), meta)
+    (out / "calibration.json").write_text(json.dumps(report, indent=1))
+    return {
+        "checkpoint": str(path),
+        "sha256": digest,
+        "steps": steps,
+        "model": model,
+        "device": device,
+        "step_ms": round(1000 * statistics.median(times), 2),
+        "peak_memory_gb": round(peak, 3),
+        "trainable_params": n_params,
+        "thresholds": {"presence": tau, "binarize": binarize},
     }

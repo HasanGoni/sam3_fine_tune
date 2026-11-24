@@ -1,4 +1,4 @@
-# sam3-train-unveil root=/path/to/dataset [recipe=FILE] [validate_only=false trial_steps=N] [show_batches=N]
+# sam3-train-unveil root=/path/to/dataset [recipe=FILE] [validate_only=true] [show_batches=N]
 defaults:
   - _self_
   - override hydra/job_logging: none
@@ -9,7 +9,13 @@ recipe: null             # recipe file; default <root>/prepared/unveil/recipe.ya
 validate_only: true      # check the recipe and the prepared view, then stop; false runs the trial (training comes in a later slice)
 trial_steps: 300         # steps of the trial run (validate_only=false); it prints step time and peak memory
 trial_size: 1008         # image side during the trial (1008 is the real value; smaller only for smoke tests)
-epochs: null             # checked when given (a number above 0); used by training in a later slice
+train: false             # with validate_only=false: train for real (needs out=) instead of the trial run
+out: null                # train=true: folder for unveil.safetensors (+ .sha256), calibration.json and log.jsonl
+epochs: null             # train=true: steps = epochs x train images / images per step; default `epochs:` of recipe.yaml
+steps: null              # train=true: optimizer steps, overrides epochs
+accumulate: null         # micro-batches per optimizer step (8 GPUs x 1 = 1 GPU x 8 is the paper's batch); recipe.yaml
+seed: 0
+image_size: 1008         # train=true: image side for training and calibration (1008 is the real value)
 model: unveil            # unveil | stub (a tiny CNN for CPU smoke tests)
 device: auto             # auto | cpu | cuda
 sam3_checkpoint: null    # SAM3 weights for model=unveil
