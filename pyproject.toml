@@ -109,6 +109,7 @@ sam3-finetune = "sam3_fine_tune.finetune.cli:main"
 sam3-infer = "sam3_fine_tune.inference.cli:main"
 sam3-infer-unveil = "sam3_fine_tune.infer_unveil.cli:main"
 sam3-prepare = "sam3_fine_tune.prepare.cli:main"
+sam3-train-unveil = "sam3_fine_tune.train_unveil.cli:main"
 
 [project.urls]
 "Homepage" = "https://github.com/facebookresearch/sam3"
@@ -125,6 +126,7 @@ where = ["."]
 "sam3_fine_tune.infer_unveil" = ["conf/*.yaml"]
 "sam3_fine_tune.prepare" = ["conf/*.yaml"]
 "sam3_fine_tune.sambaunet" = ["conf/*.yaml"]
+"sam3_fine_tune.train_unveil" = ["conf/*.yaml"]
 
 [tool.setuptools.dynamic]
 version = {attr = "sam3.__version__"}

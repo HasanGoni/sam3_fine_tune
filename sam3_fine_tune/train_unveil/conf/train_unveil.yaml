@@ -1,0 +1,16 @@
+# sam3-train-unveil root=/path/to/dataset [recipe=FILE] [show_batches=N]
+defaults:
+  - _self_
+  - override hydra/job_logging: none
+  - override hydra/hydra_logging: none
+
+root: ???                # dataset root already processed by sam3-prepare (<root>/prepared/unveil/)
+recipe: null             # recipe file; default <root>/prepared/unveil/recipe.yaml
+validate_only: true      # check the recipe and the prepared view, then stop (the trial and training come in later slices)
+epochs: null             # checked when given (a number above 0); used by training in a later slice
+show_batches: 0       # print the image ids each stream contributes to the first N steps
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
