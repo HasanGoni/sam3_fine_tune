@@ -58,7 +58,7 @@ the prompt string, used exactly as typed.
 4. Open `ROOT/prepared/unveil/recipe.yaml` and set `kind: region | balanced` for every category (it ships as `???`).
    Fill `families:` per `docs/unveil-recipe.md`. Run `sam3-prepare root=ROOT` again: families also set the SAM3
    `not_annotated_category_ids`, and the report shows `images_with_not_annotated_flags`.
-5. Train: `sam3-finetune` on `ROOT/prepared/sam3`. UNVEIL training (`sam3-train-unveil`, #19) is not built yet.
+5. Train: `sam3-finetune` on `ROOT/prepared/sam3`. UNVEIL training: `.github/skills/train-unveil/SKILL.md`; the whole chain: `.github/skills/train-and-compare/SKILL.md`.
 
 ## Extend a dataset
 
