@@ -57,5 +57,9 @@ results compare key-by-key with SAM3.
 **HPC**: the Acme cluster reached with `ssh hpc_muc`, where training and evaluation run and the git remote lives; this
 workspace is a staging copy. **Runbook skills**: the `.github/skills/*/SKILL.md` files describing HPC procedures.
 
-**Console scripts**: `sam3-dataset` (build or extend a dataset), `sam3-prepare` (one COCO root to the SAM3 and UNVEIL views with a shared frozen split), `sam3-finetune` (train then evaluate), `sam3-infer`
+**Console scripts**: `sam3-dataset` (build or extend a dataset), `sam3-prepare` (one COCO root to the SAM3 and UNVEIL views with a shared frozen split), `sam3-finetune` (train then evaluate), `sam3-compare` (score models on the prepared test split), `sam3-infer`
 (run base or fine-tuned SAM3 with one or several text prompts, each with one threshold or a sweep of thresholds, over a folder or a COCO split; with a COCO split it scores the predictions, and a checkpoint list compares models, `null` = base).
+
+**Model entry**: one column of a comparison, `{name, kind, ...}`: a kind (`sam3-base`, `sam3-finetuned` with a checkpoint, `predictions` = a saved `sam3-infer` output), a checkpoint where it applies. Entries are independent, so adding a column changes no other.
+
+**Compare**: `sam3-compare` scores a list of model entries on the prepared `test` split with one metric, the **pooled union-mask IoU** per category at threshold 0.5: intersection and union pixels summed over the images annotated for the category, one mask per image (the union of the instances above the threshold). Images flagged `not_annotated` for a category are skipped; a category with no scored image is shown as `n/a`, not 0. It prints one table with the image count per category.
