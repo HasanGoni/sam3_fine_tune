@@ -1,12 +1,14 @@
-"""Hydra CLI:  sam3-train-unveil root=... [recipe=FILE] [validate_only=true show_batches=N]  (see conf/train_unveil.yaml)"""
+"""Hydra CLI:  sam3-train-unveil root=... [recipe=FILE] [validate_only=false trial_steps=N]  (see conf/train_unveil.yaml)"""
 
 from __future__ import annotations
 
 import hydra
+import torch
 from omegaconf import DictConfig, OmegaConf
 
 from .ops import epochs_problem, RecipeError, validate_recipe
 from .streams import batch_composition, build_streams, load_index
+from .trainer import run_trial
 
 
 def _plain(value: object) -> object:
@@ -42,6 +44,24 @@ def main(cfg: DictConfig) -> None:
     }
     if cfg.show_batches:
         shown["batches"] = batch_composition(plan, index, cfg.show_batches)
+    if not cfg.validate_only:
+        device = cfg.device
+        if device == "auto":
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        plan["sam3_checkpoint"] = cfg.sam3_checkpoint
+    if not cfg.validate_only:
+        try:
+            shown["trial"] = run_trial(
+                plan,
+                index,
+                cfg.root,
+                cfg.trial_steps,
+                cfg.model,
+                device,
+                cfg.trial_size,
+            )
+        except ValueError as e:
+            raise SystemExit(str(e))
     print(OmegaConf.to_yaml(OmegaConf.create(shown)))
 
 

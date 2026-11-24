@@ -3,8 +3,10 @@
 import json
 
 import pytest
+import torch
 import yaml
 
+from sam3_fine_tune.train_unveil.trainer import StubModel
 from tests.train_unveil.test_validate import (
     prepared_root,
     run_train_unveil,
@@ -43,6 +45,14 @@ def test_nan_epochs_in_the_recipe_is_rejected(tmp_path):
     write_recipe(path, epochs=float("nan"))
     p = run_train_unveil(path)
     assert p.returncode != 0 and "epochs" in p.stderr
+
+
+def test_stub_model_builds_its_tensors_on_the_features_device():
+    model = StubModel(["a", "b"], ["a", "b"]).to("meta")
+    x = torch.zeros(3, 8, 8, device="meta")
+    y = torch.zeros(8, 8, device="meta")
+    batch = [(x, y, "region", 0, 1.0), (x, None, "balanced", 1, 0.0)]
+    assert model.step_loss(batch).device.type == "meta"
 
 
 def edit_index(path, split, name, edit):
