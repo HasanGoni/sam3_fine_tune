@@ -58,7 +58,7 @@ results compare key-by-key with SAM3.
 workspace is a staging copy. **Runbook skills**: the `.github/skills/*/SKILL.md` files describing HPC procedures.
 
 **Console scripts**: `sam3-dataset` (build or extend a dataset), `sam3-prepare` (one COCO root to the SAM3 and UNVEIL views with a shared frozen split), `sam3-finetune` (train then evaluate), `sam3-compare` (score models on the prepared test split), `sam3-infer`
-(run base or fine-tuned SAM3 with one or several text prompts, each with one threshold or a sweep of thresholds, over a folder or a COCO split; with a COCO split it scores the predictions, and a checkpoint list compares models, `null` = base), `sam3-infer-unveil` (the same for UNVEIL: a concept map per prompt, cut at `threshold` or at the checkpoint's per-category binarize), `sam3-train-unveil` (check the UNVEIL recipe against the prepared view, trial-run for step time and memory).
+(run base or fine-tuned SAM3 with one or several text prompts, each with one threshold or a sweep of thresholds, over a folder or a COCO split; with a COCO split it scores the predictions, and a checkpoint list compares models, `null` = base), `sam3-infer-unveil` (the same for UNVEIL: a concept map per prompt, cut at `threshold` or at the checkpoint's per-category binarize), `sam3-train-unveil` (check the UNVEIL recipe, trial-run, train and fit thresholds on val).
 
 **Gate**: a presence check that decides per image whether a category is present before its segmentation is kept. With the gate off you see the raw concept map. Every table says which gate setting each column used, so gated and ungated numbers are never mixed.
 

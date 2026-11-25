@@ -60,8 +60,8 @@ sam3-finetune --data-root /path/to/dataset \
 | `sam3-finetune` | `python -m sam3_fine_tune.finetune` | train SAM3, then evaluate the best checkpoint on `test/` |
 | `sam3-infer` | `python -m sam3_fine_tune.inference` | base or fine-tuned SAM3 with one or several text prompts (each with its own threshold) on a folder of images |
 | `sam3-infer-unveil` | `python -m sam3_fine_tune.infer_unveil` | UNVEIL on a folder of images or a COCO split, same arguments and output layout as `sam3-infer`, plus `gate=false` and `path=sam3` (needs the `unveil` package and a CUDA GPU) |
+| `sam3-train-unveil` | `python -m sam3_fine_tune.train_unveil` | UNVEIL recipe on a prepared root: `validate_only` checks `recipe.yaml` and the view, a trial run reports step time and memory, `train=true out=DIR epochs=E` trains, fits the presence and binarization thresholds on the val split and writes `unveil.safetensors` (`model=unveil` is untested on the real model; `model=stub` is a CPU smoke run). Prompt ids follow the recipe's category order |
 | `sam3-compare` | `python -m sam3_fine_tune.compare` | score SAM3 (base, fine-tuned, saved predictions) and UNVEIL columns on the prepared test split with pooled union-mask IoU per category; UNVEIL columns cut the map at the checkpoint's per-category `binarize` when present, else `threshold`, and the table says which |
-| `sam3-train-unveil` | `python -m sam3_fine_tune.train_unveil` | UNVEIL recipe on a prepared root: `validate_only` checks `recipe.yaml`, the prepared view and the per-category streams, a trial run (`validate_only=false`) reports step time and peak memory (`model=unveil` is untested on the real model; `model=stub` is a CPU smoke run); training comes in a later PR |
 | – | `python -m sam3_fine_tune.sambaunet.train` / `.evaluate` | Hydra CLIs for the SAMBA-UNet baseline |
 
 ---

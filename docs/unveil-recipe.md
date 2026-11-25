@@ -1,6 +1,7 @@
 # UNVEIL recipe on a custom dataset: rules
 
-Status: **proposed**, nothing implemented. Tracked in #18. Source: UNVEIL repo (`configs/unveil.yaml`,
+Status: **implemented** (`sam3-train-unveil`, `sam3-compare`, `sam3-infer-unveil`), **untested on the real model**: the CPU
+stub model is tested, `model=unveil` has never run (it needs a CUDA GPU, the SAM3 weights and the `unveil` package). Tracked in #18. Source: UNVEIL repo (`configs/unveil.yaml`,
 `unveil/data/streams.py`, `unveil/train/{trainer,losses,calibrate,joint}.py`), paper arXiv 2611.25747.
 
 ## What the paper's recipe is made of
@@ -13,7 +14,7 @@ Status: **proposed**, nothing implemented. Tracked in #18. Source: UNVEIL repo (
 | Presence | 1 present, 0 verified absent, otherwise skipped | same; negatives must be verified (rule 4) |
 | Replay (LVIS) | positives + verified-absent categories | **off** (`per_gpu: 0`) |
 | Joint presence module | salient + camouflaged, two convention vectors | **generalized** to a configured pair of categories, optional |
-| Calibration | hard-coded SBU, ISTD, Trans10K, MSD | per category, from a held-out slice of our train split |
+| Calibration | hard-coded SBU, ISTD, Trans10K, MSD | per category, on the `val` split (rule 8) |
 
 The trainer already takes `index=` and `prompts=` and a `per_gpu` override. It does not take custom streams, a custom
 joint pair or custom calibration sets; those need code changes in our fork of the training code.
@@ -54,8 +55,10 @@ joint pair or custom calibration sets; those need code changes in our fork of th
    8x the time per step.
 7. **Joint module (optional).** `joint: [category_a, category_b]` enables it for two categories that can share an
    image and need separate presence decisions. Without it the trainer skips the module and the convention vectors.
-8. **Calibration uses train data only.** Presence thresholds are fitted on a held-out slice of the train split (a
-   fixed fraction per category, never the test split). Binarization thresholds are fitted per category on train images.
+8. **Thresholds use the `val` split only** (never `test`). `sam3-train-unveil train=true` fits, per category, the presence
+   threshold (balanced accuracy; negatives are val images of other families) and the binarization threshold (mean IoU
+   for `region`, BER for `balanced`, on the presence-gated map of the val positives). They are stored in the checkpoint
+   (`thresholds.single[<category>]`, `binarize[<category>]`). No train image is held out; a `calibration:` key in the recipe is rejected.
 9. **Fixed.** Input resolution 1008 (RoPE), SAM3 base weights, bf16 autocast, TF32 on in training, off in evaluation.
 
 ## Recipe file (sketch)
