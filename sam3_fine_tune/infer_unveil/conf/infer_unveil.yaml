@@ -1,0 +1,33 @@
+# Run UNVEIL with one or several text prompts on a folder of images or a COCO split. The image, prompt, output and
+# device arguments are the ones of `sam3-infer`; the output folder has the same layout (masks/, overlays/, summary.json).
+#   sam3-infer-unveil images=./imgs prompt="bond wire" out=./pred sam3_checkpoint=sam3.pt bpe_path=bpe_simple_vocab_16e6.txt.gz
+#   sam3-infer-unveil ... checkpoint=unveil.safetensors gate=false      # own UNVEIL weights, concept map without the presence check
+#   sam3-infer-unveil ... path=sam3                                     # UNVEIL's frozen SAM3 semantic path (base-model baseline)
+# Needs the `unveil` package and a CUDA GPU (UNVEIL builds SAM3 on CUDA).
+defaults:
+  - _self_
+  - override hydra/job_logging: none
+  - override hydra/hydra_logging: none
+
+images: null             # folder of images (png/jpg/jpeg/tif/tiff/bmp/webp), not searched recursively (or use coco_split)
+prompt: null             # ONE text prompt (or use prompts below)
+prompts: null            # several prompts, each with its own optional threshold, as for sam3-infer:
+                         #   prompts='[{text: "bond wire", threshold: 0.4}, {text: pin}]'
+                         # a threshold list (sweep) is not supported: UNVEIL gives a concept map, not scored instances
+out: ???                 # output folder: masks/, overlays/, summary.json (created; reruns overwrite)
+sam3_checkpoint: ???     # base sam3.pt, which UNVEIL builds on
+bpe_path: ???            # bpe_simple_vocab_16e6.txt.gz
+checkpoint: null         # UNVEIL weights (.safetensors); null -> UNVEIL's default checkpoint. One model per run
+coco_split: null         # COCO split folder (images/ + annotation file): segment its images and score them
+coco_ann: annotation.json  # annotation file in coco_split
+threshold: null          # binarization threshold in (0, 1] of the concept map, for prompts without their own. null = the
+                         # per-category `binarize` of `checkpoint` when it has one for the prompt (summary.json `cutoffs`), else 0.5
+device: auto             # auto | cpu | cuda (UNVEIL needs cuda)
+gate: true               # true: a mask is empty when the presence probability is below UNVEIL's threshold for the
+                         # prompt; false: the concept map as is, without the presence check
+path: unveil             # unveil | sam3 (UNVEIL's frozen SAM3 semantic path; it has no gate)
+
+hydra:
+  run:
+    dir: .               # do not create outputs/<date>/ directories
+  output_subdir: null
