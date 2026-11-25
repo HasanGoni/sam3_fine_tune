@@ -101,6 +101,8 @@ splits train/test and creates / extends a category locally. See README "Shortcut
 train/val/test split by picture. Before preparing or extending a dataset for both models, read
 `.github/skills/prepare-data/SKILL.md`.
 
+To train and compare SAM3 and UNVEIL on one dataset, read `.github/skills/train-and-compare/SKILL.md`.
+
 ## Training
 
 Before editing a training config or `category_chunk_size`, launching training (HPC `bsub` or CPU-only), or debugging a
