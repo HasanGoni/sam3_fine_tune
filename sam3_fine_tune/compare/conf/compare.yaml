@@ -14,7 +14,10 @@ models: ???              # list of model entries, each with a unique `name` and 
                          # any entry may add trained_categories: [<names>] (a fine-tune's own metadata lists them as
                          # val_*/..._AP_<name>): other categories show "not trained", and a sam3-finetuned prompt uses the
                          # trained spelling ("thin wire panda" for thin_wire_panda), the text is the label it learned
-suspect_below: 0.01      # a score under this (not for the untrained sam3-base) is shown "suspect": check prompt spelling and threshold
+                         #   {name: uv_gated, kind: unveil, checkpoint: <UNVEIL weights or omit>, gate: true}   (gate: false = ungated)
+                         #   {name: uv_sam3, kind: unveil-sam3-path}   (UNVEIL's frozen SAM3 semantic path, no gate)
+                         #   UNVEIL kinds need a CUDA GPU and the unveil package; the table says each column's gate setting
+suspect_below: 0.01      # a score under this (not for the untrained sam3-base and unveil-sam3-path) is shown "suspect": check prompt spelling and threshold
 out: compare.json       # JSON file with the same numbers as the table
 subset: null             # null = the full test split; N = a random sample of N test images
 seed: 0                  # makes the subset reproducible: same seed, same images, same table
