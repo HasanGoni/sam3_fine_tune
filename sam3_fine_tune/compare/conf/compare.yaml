@@ -1,0 +1,31 @@
+# Score models on the test split of a prepared root and print one table. Override anything from the CLI:
+#   sam3-compare root=/data/ds out=compare.json sam3_checkpoint=sam3.pt bpe_path=bpe.gz \
+#     models='[{name: base, kind: sam3-base}, {name: ft, kind: sam3-finetuned, checkpoint: exp/run1/checkpoints/checkpoint.pt}]'
+defaults:
+  - _self_
+  - override hydra/job_logging: none
+  - override hydra/hydra_logging: none
+
+root: ???                # prepared root: <root>/prepared/sam3/test/{images/, annotation_merged.json} (from sam3-prepare)
+models: ???              # list of model entries, each with a unique `name` and a `kind`:
+                         #   {name: base, kind: sam3-base}
+                         #   {name: ft, kind: sam3-finetuned, checkpoint: <training or weights-only checkpoint>}
+                         #   {name: saved, kind: predictions, path: <sam3-infer output with several prompts: masks/<slug>/<stem>.png>}
+                         # any entry may add trained_categories: [<names>] (a fine-tune's own metadata lists them as
+                         # val_*/..._AP_<name>): other categories show "not trained", and a sam3-finetuned prompt uses the
+                         # trained spelling ("thin wire panda" for thin_wire_panda), the text is the label it learned
+suspect_below: 0.01      # a score under this (not for the untrained sam3-base) is shown "suspect": check prompt spelling and threshold
+out: compare.json       # JSON file with the same numbers as the table
+subset: null             # null = the full test split; N = a random sample of N test images
+seed: 0                  # makes the subset reproducible: same seed, same images, same table
+threshold: 0.5           # confidence threshold for sam3-base / sam3-finetuned (saved predictions are scored as they are)
+sam3_checkpoint: null    # base sam3.pt (sam3-base and sam3-finetuned entries)
+bpe_path: null           # bpe_simple_vocab_16e6.txt.gz (sam3-base and sam3-finetuned entries)
+device: auto             # auto | cpu | cuda
+trust_checkpoint: false  # true = fully unpickle sam3-finetuned checkpoints (full training checkpoints need it); can run
+                         # arbitrary code, so only for checkpoints you trained yourself. false = weights-only load
+
+hydra:
+  run:
+    dir: .               # do not create outputs/<date>/ directories
+  output_subdir: null

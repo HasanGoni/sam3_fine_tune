@@ -402,8 +402,13 @@ def make_predictor(
     bpe_path: str | Path,
     device: str,
     checkpoint: str | Path | None = None,
+    trusted: bool = False,
 ) -> Predictor:
-    """Base SAM3 from ``sam3_checkpoint``, or the full fine-tuned weights from ``checkpoint`` when given."""
+    """Base SAM3 from ``sam3_checkpoint``, or the full fine-tuned weights from ``checkpoint`` when given.
+
+    ``trusted=True`` unpickles ``checkpoint`` fully (needed for training checkpoints, which also hold optimizer state
+    and other Python objects); only pass it for files you made yourself. The default stays weights-only.
+    """
     import torch
 
     from sam3 import build_sam3_image_model
@@ -419,13 +424,22 @@ def make_predictor(
     )
     if checkpoint is not None:
         try:
-            weights = torch.load(checkpoint, map_location="cpu", weights_only=True)
+            weights = torch.load(
+                checkpoint, map_location="cpu", weights_only=not trusted
+            )
             state = weights["model"]
             model.load_state_dict(state)
         except Exception as e:  # unpickling, missing "model" key, or key/shape mismatch
+            hint = (
+                ""
+                if trusted
+                else ". A full training checkpoint cannot load weights-only: for your own local checkpoint set "
+                "trust_checkpoint=true (sam3-compare), or extract the 'model' state_dict "
+                "(torch.save(ckpt['model'], path)) and use that file"
+            )
             raise ValueError(
                 f"checkpoint {checkpoint} is not a compatible fine-tuned SAM3 checkpoint: "
-                f"{type(e).__name__}: {str(e)[:300]}"
+                f"{type(e).__name__}: {str(e)[:300]}{hint}"
             ) from None
     model.eval()
     processor = Sam3Processor(model, device=device)

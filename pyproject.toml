@@ -103,6 +103,7 @@ sambaunet = [
 ]
 
 [project.scripts]
+sam3-compare = "sam3_fine_tune.compare.cli:main"
 sam3-dataset = "sam3_fine_tune.dataset.cli:main"
 sam3-finetune = "sam3_fine_tune.finetune.cli:main"
 sam3-infer = "sam3_fine_tune.inference.cli:main"
@@ -117,6 +118,7 @@ sam3-prepare = "sam3_fine_tune.prepare.cli:main"
 where = ["."]
 
 [tool.setuptools.package-data]
+"sam3_fine_tune.compare" = ["conf/*.yaml"]
 "sam3_fine_tune.dataset" = ["conf/*.yaml"]
 "sam3_fine_tune.inference" = ["conf/*.yaml"]
 "sam3_fine_tune.prepare" = ["conf/*.yaml"]

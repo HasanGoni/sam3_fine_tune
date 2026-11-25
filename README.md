@@ -59,6 +59,7 @@ sam3-finetune --data-root /path/to/dataset \
 | `sam3-dataset` | `python -m sam3_fine_tune.dataset` | Hydra CLI: images + masks → COCO, train/test split, create or extend a category |
 | `sam3-finetune` | `python -m sam3_fine_tune.finetune` | train SAM3, then evaluate the best checkpoint on `test/` |
 | `sam3-infer` | `python -m sam3_fine_tune.inference` | base or fine-tuned SAM3 with one or several text prompts (each with its own threshold) on a folder of images |
+| `sam3-compare` | `python -m sam3_fine_tune.compare` | score SAM3 columns (base, fine-tuned, saved predictions) on the prepared test split with pooled union-mask IoU per category; a fine-tuned checkpoint is loaded weights-only unless `trust_checkpoint=true` |
 | – | `python -m sam3_fine_tune.sambaunet.train` / `.evaluate` | Hydra CLIs for the SAMBA-UNet baseline |
 
 ---

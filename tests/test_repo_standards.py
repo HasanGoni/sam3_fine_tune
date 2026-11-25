@@ -1,5 +1,6 @@
 """Mechanical repo rules (see CODING_STANDARDS.md): cheap, stdlib-only, run in CI and by pre-commit."""
 
+import re
 from pathlib import Path
 
 REPO = Path(__file__).parents[1]
@@ -25,6 +26,35 @@ def test_torch_load_never_disables_weights_only_without_a_reason():
             if "weights_only=False" in line and UNSAFE_LOAD_MARKER not in line:
                 offenders.append(f"{rel}:{n}")
     assert not offenders, f"torch.load(weights_only=False) without '# {UNSAFE_LOAD_MARKER}: <reason>': {offenders}"
+
+
+# the one place the flag is derived from a caller's `trusted` argument (default False), allow-listed explicitly
+WEIGHTS_ONLY_NOT_TRUSTED = (
+    "sam3_fine_tune/inference/run.py",
+    'checkpoint, map_location="cpu", weights_only=not trusted',
+)
+
+
+def test_weights_only_is_always_the_literal_true():
+    """Any other `weights_only=` value (False, a variable, a config key) can unpickle arbitrary code."""
+    offenders = []
+    for path in _py_files(SCANNED + ("sam3",)):
+        rel = path.relative_to(REPO).as_posix()
+        if rel in UNSAFE_LOAD_ALLOWED_FILES or rel == "tests/test_repo_standards.py":
+            continue
+        lines = path.read_text().splitlines()
+        for n, line in enumerate(lines, 1):
+            for m in re.finditer(r"weights_only\s*=\s*(\w+(?:\s+\w+)?)", line):
+                if m.group(1) == "True":
+                    continue
+                if rel == WEIGHTS_ONLY_NOT_TRUSTED[0] and line.strip().endswith(
+                    "weights_only=not trusted"
+                ):
+                    continue
+                if UNSAFE_LOAD_MARKER in line and m.group(1) == "False":
+                    continue  # justified on the same line; see the test above
+                offenders.append(f"{rel}:{n}: {line.strip()}")
+    assert not offenders, f"weights_only must be the literal True: {offenders}"
 
 
 def test_every_hydra_conf_folder_is_a_python_package():
