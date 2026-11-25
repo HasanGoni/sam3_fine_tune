@@ -22,4 +22,4 @@ repos:
         language: python
         additional_dependencies: [mypy==1.13.0, numpy, omegaconf, hydra-core, types-Pillow, types-PyYAML]
         entry: mypy  # flags live in [tool.mypy] in pyproject.toml
-        files: ^sam3_fine_tune/(inference/(run|cli|score)|infer_unveil/cli|prepare/(ops|cli|ingest|unveil_view)|compare/(ops|cli))\.py$
+        files: ^sam3_fine_tune/(inference/(run|cli|score)|infer_unveil/cli|prepare/(ops|cli|ingest|unveil_view)|train_unveil/(ops|cli)|compare/(ops|cli))\.py$
