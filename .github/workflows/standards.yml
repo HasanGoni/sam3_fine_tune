@@ -11,7 +11,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install pytest pre-commit
+      - run: pip install pytest pre-commit numpy pillow
       - name: Mechanical repo rules
         run: pytest tests/test_repo_standards.py -q
       - name: Formatting and types (same hooks and file lists as local pre-commit)
